@@ -118,17 +118,123 @@ fn on_title(st: &Shared, title: &str) {
     }
 }
 
+/// Realistischer Browser-User-Agent. WebKitGTK/WKWebView melden sich sonst mit einem ungewöhnlichen
+/// UA, den TikTok (und Google beim „Weiter mit Google“) als Bot einstufen → endlose Captchas.
+/// Unter Windows ist WebView2 bereits ein normaler Edge/Chromium.
+fn browser_user_agent() -> Option<&'static str> {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        Some("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15")
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        None
+    }
+}
+
+/// Linux (WebKitGTK): Drittanbieter-Cookies erlauben und Tracking-Schutz aus – sonst funktionieren
+/// die Captcha-iframes und Social-Logins von TikTok nicht. Popups per JavaScript erlauben.
+fn relax_webview(win: &WebviewWindow) {
+    #[cfg(target_os = "linux")]
+    let _ = win.with_webview(|wv| {
+        use webkit2gtk::{CookieManagerExt, SettingsExt, WebViewExt, WebsiteDataManagerExt};
+        let view = wv.inner();
+        if let Some(settings) = WebViewExt::settings(&view) {
+            settings.set_javascript_can_open_windows_automatically(true);
+            settings.set_enable_webgl(true);
+        }
+        if let Some(dm) = view.website_data_manager() {
+            dm.set_itp_enabled(false);
+            if let Some(cm) = dm.cookie_manager() {
+                cm.set_accept_policy(webkit2gtk::CookieAcceptPolicy::Always);
+            }
+        }
+    });
+    #[cfg(not(target_os = "linux"))]
+    let _ = win;
+}
+
+/// Erzeugt ein Popup-Fenster (z. B. „Weiter mit Google“, Captcha-Fenster) mit derselben Sitzung.
+fn popup_window(app: &tauri::AppHandle, url: &url::Url, features: tauri::webview::NewWindowFeatures) -> Option<WebviewWindow> {
+    let label = format!("tiktok-popup-{}", uuid::Uuid::new_v4().simple());
+    let mut b = WebviewWindowBuilder::new(app, &label, WebviewUrl::External("about:blank".parse().ok()?))
+        .window_features(features)
+        .title(url.host_str().unwrap_or("Anmeldung"))
+        .inner_size(520.0, 720.0)
+        .on_document_title_changed(|w, title| {
+            let _ = w.set_title(&title);
+        });
+    if let Some(ua) = browser_user_agent() {
+        b = b.user_agent(ua);
+    }
+    let app2 = app.clone();
+    b = b.on_new_window(move |u, f| match popup_window(&app2, &u, f) {
+        Some(window) => tauri::webview::NewWindowResponse::Create { window },
+        None => tauri::webview::NewWindowResponse::Deny,
+    });
+    let win = b.build().ok()?;
+    relax_webview(&win);
+    Some(win)
+}
+
 fn build_window(st: &Shared, label: &str, url: url::Url, visible: bool, silent: bool) -> anyhow::Result<WebviewWindow> {
     let st2 = st.clone();
+    let app = st.app.clone();
     let script = format!("window.__SS_SILENT = {silent};\n{PAGE_SCRIPT}");
-    let win = WebviewWindowBuilder::new(&st.app, label, WebviewUrl::External(url))
+    let mut b = WebviewWindowBuilder::new(&st.app, label, WebviewUrl::External(url))
         .title(if visible { "Bei TikTok anmelden – StreamSuite" } else { "TikTok LIVE – StreamSuite" })
         .inner_size(480.0, 780.0)
         .visible(visible)
         .initialization_script(script)
         .on_document_title_changed(move |_w, title| on_title(&st2, &title))
-        .build()?;
+        .on_new_window(move |u, f| match popup_window(&app, &u, f) {
+            Some(window) => tauri::webview::NewWindowResponse::Create { window },
+            None => tauri::webview::NewWindowResponse::Deny,
+        });
+    if let Some(ua) = browser_user_agent() {
+        b = b.user_agent(ua);
+    }
+    let win = b.build()?;
+    relax_webview(&win);
     Ok(win)
+}
+
+/// Ausweichweg: `sessionid`-Cookie aus dem normalen Browser übernehmen.
+pub async fn import_session(st: &Shared, session_id: &str) -> anyhow::Result<String> {
+    let session_id = session_id.trim().trim_start_matches("sessionid=").trim_matches('"').to_string();
+    if session_id.len() < 16 {
+        bail!("Das sieht nicht wie ein gültiger sessionid-Wert aus");
+    }
+    let user = fetch_username(st, &format!("sessionid={session_id}"))
+        .await
+        .ok_or_else(|| anyhow!("TikTok hat die Sitzung nicht akzeptiert – ist der Wert vollständig und aktuell?"))?;
+    // Cookie in den WebView-Speicher schreiben, damit das LIVE-Fenster eingeloggt ist
+    let win = ensure_any_window(st)?;
+    let cookie = tauri::webview::Cookie::build(("sessionid", session_id.clone()))
+        .domain(".tiktok.com")
+        .path("/")
+        .secure(true)
+        .http_only(true)
+        .build();
+    win.set_cookie(cookie)?;
+    st.store.update(|s| {
+        s.tiktok.username = user.clone();
+        s.tiktok.session_id = Some(session_id);
+        s.tiktok.enabled = true;
+    });
+    if let Some(w) = st.app.get_webview_window(CHAT_LABEL) {
+        let _ = w.close();
+    }
+    crate::connections::start(st, Platform::Tiktok);
+    Ok(user)
+}
+
+fn ensure_any_window(st: &Shared) -> anyhow::Result<WebviewWindow> {
+    st.app
+        .get_webview_window(CHAT_LABEL)
+        .or_else(|| st.app.get_webview_window(LOGIN_LABEL))
+        .or_else(|| st.app.get_webview_window("main"))
+        .ok_or_else(|| anyhow!("Kein Fenster verfügbar"))
 }
 
 fn cookie_header(win: &WebviewWindow) -> (String, Option<String>) {

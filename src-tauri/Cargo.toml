@@ -50,3 +50,4 @@ strip = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libloading = "0.9.0"
+webkit2gtk = { version = "2.0.2", features = ["v2_38"] }

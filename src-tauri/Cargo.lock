@@ -4035,6 +4035,7 @@ dependencies = [
  "tokio-tungstenite 0.30.0",
  "url",
  "uuid",
+ "webkit2gtk",
 ]
 
 [[package]]

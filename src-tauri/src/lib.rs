@@ -137,6 +137,11 @@ async fn tiktok_show_window(st: tauri::State<'_, Shared>) -> CmdResult<()> {
     tiktok_web::show_chat_window(st.inner()).map_err(err)
 }
 
+#[tauri::command]
+async fn tiktok_import_session(st: tauri::State<'_, Shared>, session_id: String) -> CmdResult<String> {
+    tiktok_web::import_session(st.inner(), &session_id).await.map_err(err)
+}
+
 /// Benutzername manuell setzen (falls der Login im eingebetteten Fenster nicht klappt).
 #[tauri::command]
 fn tiktok_set_username(st: tauri::State<Shared>, username: String) -> CmdResult<()> {
@@ -520,6 +525,7 @@ pub fn run() {
             tiktok_login,
             tiktok_show_window,
             tiktok_set_username,
+            tiktok_import_session,
         ])
         .build(tauri::generate_context!())
         .expect("Fehler beim Starten von StreamSuite")

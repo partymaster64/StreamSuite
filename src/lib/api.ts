@@ -134,6 +134,7 @@ export const api = {
   tiktokLogin: () => invoke<void>("tiktok_login"),
   tiktokShowWindow: () => invoke<void>("tiktok_show_window"),
   tiktokSetUsername: (username: string) => invoke<void>("tiktok_set_username", { username }),
+  tiktokImportSession: (sessionId: string) => invoke<string>("tiktok_import_session", { sessionId }),
   getHistory: () => invoke<{ chat: SSEvent[]; alerts: SSEvent[] }>("get_history"),
   getStats: () => invoke<Stats>("get_stats"),
   clearHistory: () => invoke<void>("clear_history"),

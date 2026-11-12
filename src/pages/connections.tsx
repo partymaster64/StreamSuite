@@ -190,6 +190,24 @@ function TiktokCard() {
   const { settings, statuses } = useAppData();
   const [manual, setManual] = useState(false);
   const [username, setUsername] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [sessionId, setSessionId] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  const importSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImporting(true);
+    try {
+      const user = await api.tiktokImportSession(sessionId);
+      toast.success(`Bei TikTok angemeldet als @${user}`);
+      setSessionId("");
+      setImportOpen(false);
+    } catch (err) {
+      toast.error(errorText(err));
+    } finally {
+      setImporting(false);
+    }
+  };
   const loggedIn = !!settings?.tiktok.authorized;
   const hasUser = !!settings?.tiktok.username;
 
@@ -207,15 +225,54 @@ function TiktokCard() {
             <Button size="lg" onClick={() => run(api.tiktokLogin)}>
               <LogInIcon /> Mit TikTok anmelden
             </Button>
+            <Button variant="ghost" onClick={() => setImportOpen((o) => !o)}>
+              Login klappt nicht?
+            </Button>
             {!hasUser && (
               <Button variant="ghost" onClick={() => setManual((m) => !m)}>
                 Nur Benutzername eingeben
               </Button>
             )}
           </div>
+          {importOpen && (
+            <form onSubmit={importSession} className="grid gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="text-sm font-medium">Anmeldung aus deinem Browser übernehmen</div>
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>
+                  Melde dich in deinem normalen Browser (Chrome, Firefox, Edge …) auf{" "}
+                  <button type="button" className="underline underline-offset-4" onClick={() => openUrl("https://www.tiktok.com/login")}>
+                    tiktok.com
+                  </button>{" "}
+                  an.
+                </li>
+                <li>
+                  Drücke <kbd className="rounded border px-1 text-xs">F12</kbd> → Reiter <b>Anwendung</b> (Chrome/Edge) bzw. <b>Web-Speicher</b>{" "}
+                  (Firefox) → <b>Cookies</b> → <code>https://www.tiktok.com</code>.
+                </li>
+                <li>
+                  Suche den Eintrag <code>sessionid</code> und kopiere seinen <b>Wert</b> hier hinein.
+                </li>
+              </ol>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  value={sessionId}
+                  onChange={(e) => setSessionId(e.target.value)}
+                  placeholder="sessionid-Wert"
+                  autoComplete="off"
+                />
+                <Button type="submit" disabled={importing || sessionId.trim().length < 16}>
+                  {importing && <Loader2Icon className="animate-spin" />} Übernehmen
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Der Wert bleibt lokal auf diesem Rechner. Er ist wie ein Passwort – gib ihn niemandem weiter.
+              </p>
+            </form>
+          )}
           <p className="text-sm text-muted-foreground">
-            Es öffnet sich ein TikTok-Fenster. Nach dem Login erkennt StreamSuite deinen Kanal automatisch. Mit Login kannst du auch in den TikTok-Chat
-            schreiben.
+            Es öffnet sich ein TikTok-Fenster. Am zuverlässigsten ist die Anmeldung per <b>QR-Code</b> mit der TikTok-App. Danach erkennt StreamSuite
+            deinen Kanal automatisch und du kannst auch in den TikTok-Chat schreiben.
           </p>
           {manual && !hasUser && (
             <form
