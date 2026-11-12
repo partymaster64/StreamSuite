@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamSuite – Overlays</title>
+<style>
+  body { margin: 0; background: #0a0a0a; color: #fafafa; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { color: #a3a3a3; margin: 0 0 24px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #737373; margin: 24px 0 8px; }
+  a { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #262626; border-radius: 8px; color: inherit; text-decoration: none; margin-bottom: 6px; }
+  a:hover { border-color: #404040; background: #141414; }
+  code { color: #a3a3a3; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>StreamSuite</h1>
+  <p>Diese URLs als Browserquelle bzw. benutzerdefiniertes Browser-Dock in OBS einfügen.</p>
+  <h2>Integriert</h2>
+  <a href="/dock"><span>Multichat-Dock</span><code>/dock</code></a>
+  <a href="/overlay/chat"><span>Chat-Overlay</span><code>/overlay/chat</code></a>
+  <a href="/overlay/alerts"><span>Alert-Overlay</span><code>/overlay/alerts</code></a>
+  <h2>Eigene Templates</h2>
+  <div id="custom"><p>Lade …</p></div>
+</main>
+<script>
+  fetch("/api/custom").then((r) => r.json()).then((list) => {
+    const el = document.getElementById("custom");
+    el.innerHTML = list.length ? "" : "<p>Noch keine eigenen Templates.</p>";
+    for (const name of list) {
+      const a = document.createElement("a");
+      a.href = "/custom/" + encodeURIComponent(name) + "/";
+      a.innerHTML = "<span></span><code></code>";
+      a.children[0].textContent = name;
+      a.children[1].textContent = a.getAttribute("href");
+      el.appendChild(a);
+    }
+  });
+</script>
+</body>
+</html>

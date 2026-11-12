@@ -1,0 +1,52 @@
+[package]
+name = "streamsuite"
+version = "0.1.0"
+description = "StreamSuite – Twitch, YouTube & TikTok in einer App"
+authors = ["you"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "streamsuite_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+serde_json = "1"
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png", "tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.54.1", features = ["full"] }
+axum = { version = "0.8.9", features = ["ws"] }
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3.34"
+uuid = { version = "1.29.2", features = ["v4"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+sha2 = "0.11.1"
+base64 = "0.23.1"
+url = "2.5.8"
+mime_guess = "2.0.5"
+log = "0.4.35"
+anyhow = "1.0.104"
+parking_lot = "0.13.0"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "form", "http2", "query"] }
+tauri-plugin-single-instance = "2.5.5"
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libloading = "0.9.0"

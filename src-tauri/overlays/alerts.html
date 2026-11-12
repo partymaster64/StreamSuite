@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>StreamSuite – Alert-Overlay</title>
+<!--
+  Parameter (URL):
+    types=follow,subscribe,…   Nur diese Alert-Typen anzeigen (Standard: alle)
+    platforms=twitch,youtube,tiktok,system   Plattformen filtern (system = kombinierte Likes)
+    duration=6                 Anzeigedauer in Sekunden
+    size=28                    Basis-Schriftgröße in px
+    sound=<URL>                Optionaler Sound (z. B. /custom/meine-sounds/ding.mp3)
+    volume=0.5                 Lautstärke 0..1
+-->
+<style>
+  :root { --size: 28px; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: var(--size);
+    height: 100vh; display: grid; place-items: center;
+  }
+  #alert {
+    min-width: 12em; max-width: 90vw;
+    display: flex; align-items: center; gap: .7em;
+    background: rgba(10, 10, 10, .82);
+    color: #fff;
+    border-radius: .7em;
+    padding: .7em 1em;
+    border-left: .22em solid var(--accent, #7c3aed);
+    box-shadow: 0 .4em 2em rgba(0,0,0,.45);
+    opacity: 0; transform: translateY(20px) scale(.96);
+    transition: opacity .35s ease, transform .35s ease;
+  }
+  #alert.show { opacity: 1; transform: none; }
+  .icon { flex: none; width: 1.6em; height: 1.6em; color: var(--accent); }
+  .icon svg { width: 100%; height: 100%; }
+  .media { flex: none; width: 2.4em; height: 2.4em; border-radius: .4em; object-fit: contain; }
+  .title { font-size: .62em; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 700; }
+  .text { font-weight: 700; line-height: 1.2; }
+  .message { font-size: .62em; opacity: .85; margin-top: .2em; }
+</style>
+</head>
+<body>
+<div id="alert"></div>
+<script src="/sdk.js"></script>
+<script>
+  const S = StreamSuite, H = S.helpers;
+  const types = S.param("types", "");
+  const typeFilter = types ? types.split(",") : null;
+  const platforms = S.param("platforms", "twitch,youtube,tiktok,system").split(",");
+  const duration = Number(S.param("duration", "6")) * 1000;
+  const soundUrl = S.param("sound", "");
+  const volume = Number(S.param("volume", "0.5"));
+  document.documentElement.style.setProperty("--size", S.param("size", "28") + "px");
+
+  const box = document.getElementById("alert");
+  const queue = [];
+  let busy = false;
+
+  function next() {
+    if (busy || !queue.length) return;
+    busy = true;
+    const ev = queue.shift();
+    const a = H.formatAlert(ev);
+    const accent = H.platformColor(ev.platform);
+    box.style.setProperty("--accent", accent);
+    const media = ev.gift_image || (ev.user && ev.user.avatar);
+    box.innerHTML =
+      (media ? `<img class="media" src="${H.escapeHtml(media)}">` : `<span class="icon">${H.platformIcon(ev.platform)}</span>`) +
+      `<div><div class="title">${H.escapeHtml(a.title)}</div>` +
+      `<div class="text">${H.escapeHtml(a.text)}</div>` +
+      (a.message ? `<div class="message">${H.escapeHtml(a.message)}</div>` : "") + `</div>`;
+    if (soundUrl) { const au = new Audio(soundUrl); au.volume = volume; au.play().catch(() => {}); }
+    requestAnimationFrame(() => box.classList.add("show"));
+    setTimeout(() => {
+      box.classList.remove("show");
+      setTimeout(() => { busy = false; next(); }, 450);
+    }, duration);
+  }
+
+  S.connect().on("alert", (ev) => {
+    if (typeFilter && !typeFilter.includes(ev.type)) return;
+    if (!platforms.includes(ev.platform)) return;
+    queue.push(ev);
+    next();
+  });
+</script>
+</body>
+</html>

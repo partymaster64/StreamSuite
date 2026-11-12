@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>StreamSuite – Chat-Overlay</title>
+<!--
+  Parameter (URL):
+    platforms=twitch,youtube,tiktok   Plattformen filtern
+    fade=30                           Nachrichten nach N Sekunden ausblenden (0 = nie)
+    max=30                            Max. Anzahl sichtbarer Nachrichten
+    size=18                           Schriftgröße in px
+    avatars=1                         Profilbilder anzeigen (sofern vorhanden)
+    alerts=0                          Alerts zusätzlich im Chat anzeigen
+    history=1                         Bisherigen Chatverlauf beim Laden anzeigen
+-->
+<style>
+  :root { --size: 18px; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: var(--size);
+    color: #fff;
+    height: 100vh;
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  #chat { display: flex; flex-direction: column; gap: .35em; padding: .5em; }
+  .msg {
+    display: flex; align-items: flex-start; gap: .45em;
+    background: rgba(10, 10, 10, .62);
+    border-radius: .55em; padding: .4em .6em;
+    line-height: 1.35;
+    text-shadow: 0 1px 2px rgba(0,0,0,.6);
+    animation: in .25s ease-out;
+    transition: opacity .6s, transform .6s;
+    word-break: break-word;
+  }
+  .msg.out { opacity: 0; transform: translateX(-12px); }
+  .msg.alert { background: rgba(124, 58, 237, .75); }
+  .icon { flex: none; width: 1em; height: 1em; margin-top: .18em; }
+  .icon svg { width: 100%; height: 100%; display: block; }
+  .avatar { flex: none; width: 1.3em; height: 1.3em; border-radius: 50%; object-fit: cover; }
+  .name { font-weight: 700; margin-right: .3em; }
+  .ss-emote { height: 1.4em; vertical-align: middle; margin: -.2em 0; }
+  @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div id="chat"></div>
+<script src="/sdk.js"></script>
+<script>
+  const S = StreamSuite, H = S.helpers;
+  const platforms = S.param("platforms", "twitch,youtube,tiktok").split(",");
+  const fade = Number(S.param("fade", "30"));
+  const max = Number(S.param("max", "30"));
+  const avatars = S.param("avatars", "1") === "1";
+  const showAlerts = S.param("alerts", "0") === "1";
+  const showHistory = S.param("history", "1") === "1";
+  document.documentElement.style.setProperty("--size", S.param("size", "18") + "px");
+  const chat = document.getElementById("chat");
+
+  function add(ev, isAlert) {
+    if (!isAlert && !platforms.includes(ev.platform)) return;
+    const el = document.createElement("div");
+    el.className = "msg" + (isAlert ? " alert" : "");
+    el.dataset.id = (ev.data && ev.data.message_id) || ev.id;
+    const color = (ev.user && ev.user.color) || H.platformColor(ev.platform);
+    let html = `<span class="icon" style="color:${H.platformColor(ev.platform)}">${H.platformIcon(ev.platform)}</span>`;
+    if (avatars && ev.user && ev.user.avatar) html += `<img class="avatar" src="${H.escapeHtml(ev.user.avatar)}">`;
+    if (isAlert) {
+      const a = H.formatAlert(ev);
+      html += `<span><b>${H.escapeHtml(a.title)}</b> – ${H.escapeHtml(a.text)}${a.message ? " " + H.escapeHtml(a.message) : ""}</span>`;
+    } else {
+      html += `<span><span class="name" style="color:${H.escapeHtml(color)}">${H.escapeHtml(ev.user.display_name)}</span>${H.renderMessage(ev)}</span>`;
+    }
+    el.innerHTML = html;
+    chat.appendChild(el);
+    while (chat.children.length > max) chat.firstElementChild.remove();
+    if (fade > 0) {
+      setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 700); }, fade * 1000);
+    }
+  }
+
+  const ss = S.connect();
+  ss.on("history", (h) => {
+    chat.innerHTML = "";
+    if (!showHistory || fade > 0) return;
+    h.chat.slice(-max).forEach((ev) => ev.type === "chat" && add(ev, false));
+  });
+  ss.on("chat", (ev) => { if (ev.type === "chat") add(ev, false); });
+  ss.on("delete", (ev) => {
+    const el = chat.querySelector(`[data-id="${CSS.escape(ev.data.message_id || "")}"]`);
+    if (el) el.remove();
+  });
+  if (showAlerts) ss.on("alert", (ev) => add(ev, true));
+</script>
+</body>
+</html>
