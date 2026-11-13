@@ -88,7 +88,12 @@ Build-Ergebnisse liegen in `src-tauri/target/release/bundle/`:
 - **Windows**: `.msi` und `.exe` (NSIS)
 - **macOS**: `.app` und `.dmg`
 
-Installer für macOS und Windows lassen sich nur auf dem jeweiligen Betriebssystem bauen. Der GitHub-Workflow `.github/workflows/build.yml` baut alle drei Plattformen, wenn ein Tag `v*` gepusht wird (oder manuell gestartet wird).
+Installer für macOS und Windows lassen sich nur auf dem jeweiligen Betriebssystem bauen. Das übernimmt der GitHub-Workflow `.github/workflows/build.yml`:
+
+- **Release veröffentlichen** (GitHub → *Releases* → *Draft a new release* → Tag wie `v0.2.0` → *Publish release*): Der Workflow baut macOS (Apple Silicon + Intel), Windows (x64) und Linux (x64 + ARM64) und hängt die Installer automatisch an dieses Release an (ca. 15–25 Minuten). Die App-Version wird dabei aus dem Tag übernommen (`v0.2.0` → `0.2.0`).
+- **Manuell starten** (*Actions* → *Build* → *Run workflow*): baut alle Plattformen zum Testen; die Installer liegen als Artefakte am Workflow-Lauf.
+
+Als Entwurf gespeicherte Releases starten noch keinen Build, erst das Veröffentlichen. Die Builds sind nicht signiert: Windows SmartScreen und macOS Gatekeeper zeigen beim ersten Start eine Warnung.
 
 ## Projektstruktur
 
