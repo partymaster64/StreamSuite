@@ -5,12 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertLine, ChatLine, EmptyState, PageHeader, PlatformIcon } from "@/components/common";
+import { TiktokModMenu } from "@/components/tiktok-mod-menu";
 import { cn } from "@/lib/utils";
 import { api, errorText, PLATFORM_META, PLATFORMS, type Platform, type SSEvent } from "@/lib/api";
 import { useAppData } from "@/lib/store";
 
 export function ChatPage() {
-  const { chat, alerts, deleted, stats, clearHistory } = useAppData();
+  const { chat, alerts, deleted, stats, settings, statuses, clearHistory } = useAppData();
+  // Moderation nur im eigenen, laufenden LIVE mit Anmeldung
+  const canModerateTiktok = !!settings?.tiktok.authorized && !!statuses.tiktok?.live;
+  const modActions = (ev: SSEvent) =>
+    canModerateTiktok && ev.platform === "tiktok" && !ev.test && ev.user && !ev.user.is_owner && /^\d+$/.test(ev.user.id) ? (
+      <TiktokModMenu user={ev.user} />
+    ) : undefined;
   const [filter, setFilter] = useState<Record<Platform, boolean>>({ twitch: true, youtube: true, tiktok: true });
   const [showAlerts, setShowAlerts] = useState(true);
   const [target, setTarget] = useState("all");
@@ -95,7 +102,7 @@ export function ChatPage() {
                   <AlertLine ev={ev} />
                 </div>
               ) : (
-                <ChatLine key={ev.id} ev={ev} deleted={deleted.has((ev.data?.message_id as string) ?? "")} />
+                <ChatLine key={ev.id} ev={ev} deleted={deleted.has((ev.data?.message_id as string) ?? "")} actions={modActions(ev)} />
               ),
             )
           )}

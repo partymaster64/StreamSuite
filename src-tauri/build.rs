@@ -1,4 +1,4 @@
-//! Bettet die App-Zugangsdaten (Twitch Client-ID, Google OAuth-Client, EulerStream-Key) beim Build ein,
+//! Bettet die App-Zugangsdaten (Twitch Client-ID, Google OAuth-Client) beim Build ein,
 //! damit Endnutzer sich nur noch per Klick anmelden müssen.
 //!
 //! Quelle (in dieser Reihenfolge): Umgebungsvariablen, sonst `credentials.json` neben dieser Datei.
@@ -10,7 +10,6 @@ const KEYS: &[(&str, &str)] = &[
     ("SS_TWITCH_CLIENT_ID", "twitch_client_id"),
     ("SS_GOOGLE_CLIENT_ID", "google_client_id"),
     ("SS_GOOGLE_CLIENT_SECRET", "google_client_secret"),
-    ("SS_EULERSTREAM_API_KEY", "eulerstream_api_key"),
 ];
 
 fn main() {

@@ -69,7 +69,7 @@ export interface Stats {
 export interface Settings {
   server_port: number;
   close_to_tray: boolean;
-  embedded: Record<Platform, boolean>;
+  embedded: Partial<Record<Platform, boolean>>;
   twitch: { enabled: boolean; client_id: string; authorized: boolean; credentials_ok: boolean; login?: string; display_name?: string };
   youtube: {
     enabled: boolean;
@@ -81,7 +81,7 @@ export interface Settings {
     min_chat_poll_ms: number;
     subscriber_poll_secs: number;
   };
-  tiktok: { enabled: boolean; username: string; api_key: string; authorized: boolean; credentials_ok: boolean };
+  tiktok: { enabled: boolean; username: string; authorized: boolean; credentials_ok: boolean };
   alerts: { like_interval_secs: number; like_min_count: number; tiktok_min_coins: number };
 }
 
@@ -101,6 +101,36 @@ export interface DeviceAuth {
 
 export type ResultMap = Partial<Record<Platform, { ok: boolean; error?: string }>>;
 
+export interface TiktokRoomInfo {
+  live: boolean;
+  room_id?: string;
+  title?: string;
+  topic?: string | null;
+  viewers?: number;
+  likes?: number;
+  total_viewers?: number;
+  started_at?: number;
+  share_url?: string | null;
+  cover?: string | null;
+  comments_enabled?: boolean;
+  comment_filter?: boolean;
+  logged_in?: boolean;
+}
+
+export interface TiktokModerator {
+  id: string;
+  name: string;
+  display_name: string;
+  avatar?: string | null;
+}
+
+export interface TiktokBlockedWord {
+  id: string;
+  word: string;
+}
+
+export type TiktokModAction = "mute" | "unmute" | "block" | "unblock";
+
 export interface StreamInfoResponse {
   twitch: {
     connected: boolean;
@@ -111,6 +141,11 @@ export interface StreamInfoResponse {
     connected: boolean;
     error?: string;
     info?: { video_id: string; status: "live" | "upcoming"; title: string; description: string; category_id: string } | null;
+  };
+  tiktok: {
+    connected: boolean;
+    error?: string;
+    info?: TiktokRoomInfo;
   };
 }
 
@@ -135,6 +170,16 @@ export const api = {
   tiktokShowWindow: () => invoke<void>("tiktok_show_window"),
   tiktokSetUsername: (username: string) => invoke<void>("tiktok_set_username", { username }),
   tiktokImportSession: (sessionId: string) => invoke<string>("tiktok_import_session", { sessionId }),
+  tiktokRoomInfo: () => invoke<TiktokRoomInfo>("tiktok_room_info"),
+  tiktokSetRoomSwitch: (setting: "comments" | "comment_filter", enabled: boolean) =>
+    invoke<void>("tiktok_set_room_switch", { setting, enabled }),
+  tiktokModerate: (userId: string, action: TiktokModAction, duration?: number) =>
+    invoke<void>("tiktok_moderate", { userId, action, duration }),
+  tiktokModerators: () => invoke<TiktokModerator[]>("tiktok_moderators"),
+  tiktokSetModerator: (userId: string, enabled: boolean) => invoke<void>("tiktok_set_moderator", { userId, enabled }),
+  tiktokBlockedWords: () => invoke<TiktokBlockedWord[]>("tiktok_blocked_words"),
+  tiktokAddBlockedWord: (word: string) => invoke<TiktokBlockedWord>("tiktok_add_blocked_word", { word }),
+  tiktokDeleteBlockedWord: (wordId: string) => invoke<void>("tiktok_delete_blocked_word", { wordId }),
   getHistory: () => invoke<{ chat: SSEvent[]; alerts: SSEvent[] }>("get_history"),
   getStats: () => invoke<Stats>("get_stats"),
   clearHistory: () => invoke<void>("clear_history"),

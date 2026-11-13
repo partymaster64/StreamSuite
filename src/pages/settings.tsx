@@ -19,14 +19,12 @@ function AdvancedCredentials() {
   const [twitch, setTwitch] = useState("");
   const [gId, setGId] = useState("");
   const [gSecret, setGSecret] = useState("");
-  const [euler, setEuler] = useState("");
 
   useEffect(() => {
     if (!settings) return;
     setTwitch(settings.twitch.client_id);
     setGId(settings.youtube.client_id);
     setGSecret(settings.youtube.client_secret);
-    setEuler(settings.tiktok.api_key);
   }, [settings]);
 
   const save = async () => {
@@ -35,7 +33,6 @@ function AdvancedCredentials() {
         await api.saveSettings({
           twitch: { client_id: twitch.trim() },
           youtube: { client_id: gId.trim(), client_secret: gSecret.trim() },
-          tiktok: { api_key: euler.trim() },
         }),
       );
       toast.success("Zugangsdaten gespeichert");
@@ -44,7 +41,7 @@ function AdvancedCredentials() {
     }
   };
 
-  const embedded = (p: "twitch" | "youtube" | "tiktok") =>
+  const embedded = (p: "twitch" | "youtube") =>
     settings?.embedded[p] ? (
       <Badge variant="outline" className="h-4 px-1 text-[10px]">
         in der App enthalten
@@ -90,15 +87,9 @@ function AdvancedCredentials() {
               <Input type="password" value={gSecret} onChange={(e) => setGSecret(e.target.value)} placeholder="leer = Standard" />
             </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label className="flex items-center gap-2">
-              <PlatformIcon platform="tiktok" /> EulerStream API-Key {embedded("tiktok")}
-            </Label>
-            <Input type="password" value={euler} onChange={(e) => setEuler(e.target.value)} placeholder="leer = Standard" />
-            <p className="text-xs text-muted-foreground">
-              Kostenlos auf <ExternalLink href="https://www.eulerstream.com">eulerstream.com</ExternalLink> (Community-Tarif)
-            </p>
-          </div>
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <PlatformIcon platform="tiktok" /> TikTok braucht keine Zugangsdaten: StreamSuite verbindet sich direkt mit TikTok LIVE.
+          </p>
           <Button className="w-fit" onClick={save}>
             Zugangsdaten speichern
           </Button>

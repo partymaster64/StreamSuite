@@ -215,10 +215,9 @@ function TiktokCard() {
     <PlatformCard
       platform="tiktok"
       title="TikTok LIVE"
-      description="Chat lesen & schreiben, Follows, Geschenke mit Coins, Likes, Shares"
+      description="Chat lesen & schreiben, Moderation, Follows, Geschenke mit Coins, Likes, Shares – direkt verbunden, ohne Zusatzdienst"
       loggedIn={hasUser}
     >
-      {settings && !settings.tiktok.credentials_ok && <MissingCredentials />}
       {!loggedIn && (
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -272,7 +271,8 @@ function TiktokCard() {
           )}
           <p className="text-sm text-muted-foreground">
             Es öffnet sich ein TikTok-Fenster. Am zuverlässigsten ist die Anmeldung per <b>QR-Code</b> mit der TikTok-App. Danach erkennt StreamSuite
-            deinen Kanal automatisch und du kannst auch in den TikTok-Chat schreiben.
+            deinen Kanal automatisch. Mit Anmeldung kannst du auch in den TikTok-Chat schreiben, Zuschauer moderieren und Kommentar-Einstellungen
+            ändern.
           </p>
           {manual && !hasUser && (
             <form
@@ -282,7 +282,7 @@ function TiktokCard() {
                 void run(() => api.tiktokSetUsername(username));
               }}
             >
-              <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@deinname (nur lesen, ohne Chat-Senden)" />
+              <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@deinname (nur lesen, ohne Senden & Moderation)" />
               <Button type="submit" disabled={!username.trim()}>
                 Übernehmen
               </Button>

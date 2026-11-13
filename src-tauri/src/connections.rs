@@ -25,6 +25,9 @@ pub fn stop(st: &Shared, p: Platform) {
     if p == Platform::Youtube {
         *st.youtube_live.lock() = None;
     }
+    if p == Platform::Tiktok {
+        crate::tiktok::clear_room(st);
+    }
 }
 
 /// Initialer Status + Autostart aller aktivierten und eingerichteten Plattformen.

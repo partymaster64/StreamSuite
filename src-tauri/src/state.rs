@@ -32,6 +32,14 @@ pub struct AppState {
     pub tiktok_pending: Mutex<HashMap<String, tokio::sync::oneshot::Sender<Result<(), String>>>>,
     /// Vom TikTok-Fenster erkannter Benutzername.
     pub tiktok_detected_user: Mutex<Option<String>>,
+    /// Offene Webcast-API-Aufrufe im TikTok-Fenster (id -> (HTTP-Status, Antwort)).
+    pub tiktok_api_pending: Mutex<HashMap<String, tokio::sync::oneshot::Sender<(i64, String)>>>,
+    /// Das TikTok-Fenster meldet Ergebnisse über einen einzigen Kanal (Dokumenttitel) – Aufträge nacheinander.
+    pub tiktok_page_lock: tokio::sync::Mutex<()>,
+    /// Laufender eigener TikTok-LIVE-Raum (für Steuerung & Moderation).
+    pub tiktok_room: Mutex<Option<crate::tiktok::TiktokRoom>>,
+    /// Zwischengespeicherte `sec_uid` des eigenen Kontos (für Wortfilter).
+    pub tiktok_sec_uid: Mutex<Option<String>>,
 }
 
 pub type Shared = Arc<AppState>;

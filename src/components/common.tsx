@@ -126,10 +126,10 @@ const BADGE_LABEL: Record<string, string> = {
   member: "Mitglied",
 };
 
-export function ChatLine({ ev, deleted, compact }: { ev: SSEvent; deleted?: boolean; compact?: boolean }) {
+export function ChatLine({ ev, deleted, compact, actions }: { ev: SSEvent; deleted?: boolean; compact?: boolean; actions?: ReactNode }) {
   const u = ev.user;
   return (
-    <div className={cn("flex gap-2 rounded-md px-2 py-1 hover:bg-muted/50", deleted && "opacity-40 line-through")}>
+    <div className={cn("group flex gap-2 rounded-md px-2 py-1 hover:bg-muted/50", deleted && "opacity-40 line-through")}>
       {!compact && <span className="mt-0.5 shrink-0 text-xs tabular-nums text-muted-foreground">{time(ev.timestamp)}</span>}
       <PlatformIcon platform={ev.platform} className="mt-0.5" />
       <div className="min-w-0 break-words text-sm leading-relaxed">
@@ -154,6 +154,7 @@ export function ChatLine({ ev, deleted, compact }: { ev: SSEvent; deleted?: bool
             )
           : ev.message}
       </div>
+      {actions && <div className="ml-auto shrink-0 self-start">{actions}</div>}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader, PlatformIcon } from "@/components/common";
+import { TiktokLiveCard } from "@/components/tiktok-live-card";
 import { api, errorText, PLATFORM_META, type Category, type Platform, type StreamInfoResponse } from "@/lib/api";
 import { useAppData } from "@/lib/store";
 
@@ -162,67 +163,70 @@ export function StreamInfoPage() {
       </PageHeader>
 
       <div className="grid gap-4 p-6 lg:grid-cols-[1fr_300px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Stream-Details</CardTitle>
-            <CardDescription>Felder, die eine Plattform nicht unterstützt, werden dort ignoriert.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <div className="grid gap-1.5">
-              <div className="flex items-center justify-between">
-                <Label>Titel</Label>
-                <span className="text-xs text-muted-foreground tabular-nums">{title.length}/100</span>
+        <div className="grid content-start gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stream-Details</CardTitle>
+              <CardDescription>Felder, die eine Plattform nicht unterstützt, werden dort ignoriert.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-5">
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between">
+                  <Label>Titel</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">{title.length}/100</span>
+                </div>
+                <Input value={title} maxLength={140} onChange={(e) => setTitle(e.target.value)} placeholder="Worum geht es heute?" />
+                {title.length > 100 && <p className="text-xs text-amber-500">YouTube erlaubt max. 100 Zeichen, Twitch max. 140.</p>}
               </div>
-              <Input value={title} maxLength={140} onChange={(e) => setTitle(e.target.value)} placeholder="Worum geht es heute?" />
-              {title.length > 100 && <p className="text-xs text-amber-500">YouTube erlaubt max. 100 Zeichen, Twitch max. 140.</p>}
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <PlatformIcon platform="twitch" /> Twitch-Kategorie
+                  </Label>
+                  <TwitchCategoryPicker value={twitchCat} onChange={setTwitchCat} />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <PlatformIcon platform="youtube" /> YouTube-Kategorie
+                  </Label>
+                  <Select value={ytCat} onValueChange={setYtCat} disabled={!ytCats.length}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={ytConnected ? "Kategorie wählen" : "YouTube nicht verbunden"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ytCats.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="grid gap-1.5">
                 <Label className="flex items-center gap-1.5">
-                  <PlatformIcon platform="twitch" /> Twitch-Kategorie
+                  <PlatformIcon platform="youtube" /> Beschreibung
                 </Label>
-                <TwitchCategoryPicker value={twitchCat} onChange={setTwitchCat} />
+                <Textarea
+                  rows={7}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Beschreibung des Livestreams (nur YouTube – Twitch und TikTok haben kein Beschreibungsfeld in ihrer API)"
+                />
               </div>
-              <div className="grid gap-1.5">
-                <Label className="flex items-center gap-1.5">
-                  <PlatformIcon platform="youtube" /> YouTube-Kategorie
-                </Label>
-                <Select value={ytCat} onValueChange={setYtCat} disabled={!ytCats.length}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={ytConnected ? "Kategorie wählen" : "YouTube nicht verbunden"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ytCats.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              <div className="flex justify-end">
+                <Button onClick={save} disabled={saving || (!targets.twitch && !targets.youtube)}>
+                  {saving && <Loader2Icon className="animate-spin" />}
+                  Auf ausgewählten Plattformen übernehmen
+                </Button>
               </div>
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label className="flex items-center gap-1.5">
-                <PlatformIcon platform="youtube" /> Beschreibung
-              </Label>
-              <Textarea
-                rows={7}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Beschreibung des Livestreams (nur YouTube – Twitch und TikTok haben kein Beschreibungsfeld in ihrer API)"
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={save} disabled={saving || (!targets.twitch && !targets.youtube)}>
-                {saving && <Loader2Icon className="animate-spin" />}
-                Auf ausgewählten Plattformen übernehmen
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          {info?.tiktok?.connected && <TiktokLiveCard info={info.tiktok.info} error={info.tiktok.error} onRefresh={() => void load()} />}
+        </div>
 
         <div className="space-y-4">
           <Card>
@@ -277,7 +281,11 @@ export function StreamInfoPage() {
                     <PlatformIcon platform="tiktok" /> TikTok
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {statuses.tiktok?.live ? "Live – " : ""}Keine API zum Ändern des Titels
+                    {!info?.tiktok?.connected
+                      ? "Nicht verbunden"
+                      : statuses.tiktok?.live || info.tiktok.info?.live
+                        ? `Live: ${info.tiktok.info?.title || "–"}`
+                        : "Nicht live"}
                   </span>
                 </span>
                 <Switch checked={false} disabled />
@@ -288,8 +296,8 @@ export function StreamInfoPage() {
             <InfoIcon />
             <AlertTitle>Hinweis zu TikTok</AlertTitle>
             <AlertDescription>
-              TikTok stellt keine offizielle Schnittstelle zum Ändern von LIVE-Titel oder -Thema bereit. Lege diese vor dem Start in der TikTok
-              LIVE Studio App bzw. der App fest.
+              Titel und Thema übernimmt TikTok beim Start des LIVE (TikTok LIVE Studio bzw. App). Für einen laufenden LIVE gibt es keine frei
+              nutzbare Schnittstelle zum Ändern. Kommentare, Wortfilter und Moderation steuerst du in der Karte „TikTok LIVE“.
             </AlertDescription>
           </Alert>
         </div>
