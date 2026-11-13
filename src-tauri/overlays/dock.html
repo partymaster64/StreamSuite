@@ -5,39 +5,127 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StreamSuite – Multichat</title>
 <style>
+  /* Optik angelehnt an das OBS-Standardthema „Yami“ (OBS 28+) */
   * { box-sizing: border-box; }
   :root {
-    --bg: #0a0a0a; --panel: #141414; --border: #262626; --text: #fafafa; --muted: #a3a3a3;
-    --twitch: #9146ff; --youtube: #ff0033; --tiktok: #25f4ee; --system: #a3a3a3;
+    --bg: #272a33;          /* Dock-Hintergrund */
+    --base: #1f212a;        /* Listen, Eingabefelder */
+    --button: #3c404b;
+    --button-hover: #4c5262;
+    --border: #3c404b;
+    --primary: #284cb8;     /* OBS-Blau (ausgewählt / aktiv) */
+    --primary-hover: #365cd3;
+    --text: #fefefe;
+    --muted: #9ea3ad;
+    --dim: #717684;
+    --danger: #e65050;
+    --live: #c4302b;
+    --ok: #3fbf61;
+    --warn: #e5b33b;
+    --twitch: #9146ff; --youtube: #ff0033; --tiktok: #25f4ee; --system: #9ea3ad;
+    color-scheme: dark;
   }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
-  body { font: 13px/1.4 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; cursor: pointer; user-select: none; color: var(--muted); background: none; font: inherit; }
-  .chip.on { color: var(--text); border-color: #404040; }
-  .chip svg { width: 12px; height: 12px; }
-  .chip .count { font-variant-numeric: tabular-nums; }
+  body { font: 12px/1.45 "Open Sans", "Segoe UI", "Noto Sans", system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; padding: 4px; gap: 4px; }
+
+  /* Scrollbalken wie in OBS */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--button); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--button-hover); }
+
+  /* Steuerelemente */
+  button, select, input { font: inherit; color: var(--text); }
+  button { background: var(--button); border: 0; border-radius: 4px; padding: 4px 10px; cursor: pointer; min-height: 24px; }
+  button:hover { background: var(--button-hover); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 1px solid var(--primary-hover); outline-offset: 0; }
+  button:disabled { opacity: .5; cursor: default; }
+  select { background: var(--button); border: 0; border-radius: 4px; padding: 3px 6px; min-height: 24px; cursor: pointer; }
+  select:hover { background: var(--button-hover); }
+  input[type=text], input:not([type]) { background: var(--base); border: 1px solid var(--border); border-radius: 4px; padding: 3px 7px; min-height: 24px; }
+  input:not([type]):focus { border-color: var(--primary-hover); outline: none; }
+  input[type=checkbox] { accent-color: var(--primary); margin: 0; }
+
+  /* Werkzeugleiste oben (Filter = umschaltbare Buttons wie in OBS) */
+  header { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; user-select: none; color: var(--muted); background: var(--button); }
+  .chip:hover { background: var(--button-hover); color: var(--text); }
+  .chip.on { color: var(--text); background: var(--primary); }
+  .chip.on:hover { background: var(--primary-hover); }
+  .chip svg { width: 12px; height: 12px; display: block; }
+  .chip .count { font-variant-numeric: tabular-nums; min-width: 1ch; }
   .spacer { flex: 1; }
-  #state { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
-  #state.ok { background: #22c55e; }
-  #list { flex: 1; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
-  .msg { display: flex; gap: 6px; padding: 3px 4px; border-radius: 4px; word-break: break-word; }
-  .msg:hover { background: #1a1a1a; }
-  .msg .icon { flex: none; width: 13px; height: 13px; margin-top: 3px; }
+  #state { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); margin: 0 5px 0 3px; flex: none; }
+  #state.ok { background: var(--ok); }
+
+  /* Chatliste: eingerahmt wie die Szenen-/Quellenliste */
+  #list { flex: 1; overflow-y: auto; padding: 2px; display: flex; flex-direction: column; background: var(--base); border: 1px solid var(--border); border-radius: 4px; }
+  .msg { display: flex; gap: 6px; padding: 3px 5px; border-radius: 2px; word-break: break-word; }
+  .msg:hover { background: #2d303b; }
+  .msg .icon { flex: none; width: 12px; height: 12px; margin-top: 3px; }
   .msg .icon svg { width: 100%; height: 100%; display: block; }
-  .msg time { flex: none; color: #737373; font-size: 11px; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .msg time { flex: none; color: var(--dim); font-size: 11px; margin-top: 1px; font-variant-numeric: tabular-nums; }
   .name { font-weight: 600; margin-right: 4px; }
-  .badge { font-size: 10px; border: 1px solid var(--border); color: var(--muted); border-radius: 3px; padding: 0 3px; margin-right: 4px; }
+  .badge { font-size: 10px; background: var(--button); color: var(--muted); border-radius: 2px; padding: 0 4px; margin-right: 4px; }
   .ss-emote { height: 20px; vertical-align: middle; margin: -3px 0; }
-  .msg.alert { background: color-mix(in srgb, var(--accent) 18%, transparent); border-left: 2px solid var(--accent); }
+  .msg.alert { background: color-mix(in srgb, var(--accent) 14%, transparent); border-left: 3px solid var(--accent); margin: 1px 0; }
   .msg.alert b { color: var(--text); }
   .msg.deleted { opacity: .4; text-decoration: line-through; }
-  #paused { display: none; position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); background: #262626; border: 1px solid #404040; color: var(--text); border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; }
-  form { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border); background: var(--panel); }
-  select, input, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
-  input { flex: 1; min-width: 0; }
-  button[type=submit] { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; cursor: pointer; }
-  #toast { position: fixed; top: 44px; right: 8px; background: #7f1d1d; color: #fff; padding: 6px 10px; border-radius: 6px; display: none; max-width: 80%; }
+  .body { flex: 1; min-width: 0; }
+  #paused { display: none; position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%); background: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  #paused:hover { background: var(--primary-hover); }
+
+  /* Eingabezeile unten */
+  #form { display: flex; gap: 4px; }
+  #form input { flex: 1; min-width: 0; }
+  #form button[type=submit] { background: var(--primary); }
+  #form button[type=submit]:hover { background: var(--primary-hover); }
+
+  /* Moderation */
+  .mod-btn { flex: none; align-self: flex-start; visibility: hidden; background: none; color: var(--muted); padding: 0 5px; min-height: 18px; border-radius: 2px; font-size: 14px; line-height: 18px; }
+  .msg:hover .mod-btn, .mod-btn.open { visibility: visible; }
+  .mod-btn:hover, .mod-btn.open { background: var(--button); color: var(--text); }
+  /* Kontextmenü wie QMenu */
+  #menu { position: fixed; z-index: 10; min-width: 200px; max-height: 80vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--button-hover); border-radius: 4px; padding: 3px; box-shadow: 0 4px 16px rgba(0,0,0,.5); display: none; }
+  #menu .label { padding: 3px 8px; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #menu .item { display: block; width: 100%; text-align: left; background: none; border-radius: 2px; padding: 3px 10px; min-height: 22px; }
+  #menu .item:hover { background: var(--primary); }
+  #menu .item.danger { color: #ff8080; }
+  #menu .item.danger:hover { color: var(--text); }
+  #menu .sep { height: 1px; background: var(--border); margin: 3px 4px; }
+  #menu .sub { padding-left: 22px; }
+
+  /* Stream-Info: Bereich wie eine OBS-Gruppe */
+  #info { display: none; background: var(--base); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; max-height: 60vh; overflow-y: auto; }
+  #info.open { display: block; }
+  .info-total { display: flex; align-items: center; gap: 6px; padding-bottom: 4px; }
+  .info-total b { font-size: 16px; font-variant-numeric: tabular-nums; }
+  .info-total span { color: var(--muted); }
+  .info-total button { margin-left: auto; padding: 0 8px; min-height: 22px; }
+  .prow { display: grid; grid-template-columns: 14px 1fr auto; gap: 1px 8px; align-items: center; padding: 5px 0; border-top: 1px solid var(--border); }
+  .prow .ic svg { width: 12px; height: 12px; display: block; }
+  .prow .pname { font-weight: 600; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .prow .viewers { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+  .prow .viewers small { color: var(--muted); font-weight: 400; }
+  .prow .detail { grid-column: 2 / 4; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+  .prow .ptitle { grid-column: 2 / 4; overflow-wrap: anywhere; }
+  .pill { font-size: 10px; font-weight: 600; border-radius: 2px; padding: 0 5px; background: var(--button); color: var(--muted); white-space: nowrap; text-transform: uppercase; letter-spacing: .02em; }
+  .pill.live { background: var(--live); color: #fff; }
+  .pill.ok { color: var(--ok); }
+  .pill.connecting { color: var(--warn); }
+  .pill.error { color: #ff8080; }
+  #title-form { display: grid; gap: 5px; padding-top: 6px; border-top: 1px solid var(--border); }
+  #title-form .targets { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); align-items: center; }
+  #title-form label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text); }
+  #title-form label.off { opacity: .4; cursor: not-allowed; }
+  #title-form .row { display: flex; gap: 4px; }
+  #title-form .row input { flex: 1; min-width: 0; }
+  #title-form .hint { color: var(--dim); font-size: 11px; }
+  #title-save { background: var(--primary); }
+  #title-save:hover { background: var(--primary-hover); }
+
+  #toast { position: fixed; top: 36px; right: 8px; background: #7a2626; border: 1px solid #a33a3a; color: #fff; padding: 5px 10px; border-radius: 4px; display: none; max-width: 80%; white-space: pre-line; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  #toast.ok { background: #1f5a33; border-color: #2e7d48; }
 </style>
 </head>
 <body>
@@ -47,8 +135,24 @@
   <button class="chip on" data-p="youtube"><span style="color:var(--youtube)" class="ic"></span><span class="count" id="v-youtube">–</span></button>
   <button class="chip on" data-p="tiktok"><span style="color:var(--tiktok)" class="ic"></span><span class="count" id="v-tiktok">–</span></button>
   <span class="spacer"></span>
+  <button class="chip" id="info-toggle" title="Stream-Info: Status, Zuschauer & Titel">Info</button>
   <button class="chip on" id="alerts-toggle">Alerts</button>
 </header>
+<section id="info">
+  <div class="info-total"><b id="info-viewers">–</b><span>Zuschauer gesamt</span><button type="button" id="info-refresh" title="Titel neu laden">↻</button></div>
+  <div id="info-rows"></div>
+  <form id="title-form">
+    <div class="row">
+      <input id="title-input" placeholder="Neuer Stream-Titel" maxlength="140" autocomplete="off">
+      <button type="submit" id="title-save">Speichern</button>
+    </div>
+    <div class="targets">Ändern auf:
+      <label data-p="twitch"><input type="checkbox" value="twitch" checked> Twitch</label>
+      <label data-p="youtube"><input type="checkbox" value="youtube" checked> YouTube</label>
+    </div>
+    <div class="hint">Den TikTok-Titel legt TikTok beim Start des LIVE fest – er lässt sich nur in TikTok ändern.</div>
+  </form>
+</section>
 <div id="list"></div>
 <button id="paused">Neue Nachrichten ↓</button>
 <form id="form">
@@ -61,6 +165,7 @@
   <input id="input" placeholder="Nachricht senden …" autocomplete="off" maxlength="200">
   <button type="submit">Senden</button>
 </form>
+<div id="menu"></div>
 <div id="toast"></div>
 <script src="/sdk.js"></script>
 <script>
@@ -99,7 +204,7 @@
     el.dataset.kind = isAlert ? "alert" : "chat";
     el.dataset.id = (ev.data && ev.data.message_id) || ev.id;
     el.style.setProperty("--accent", H.platformColor(ev.platform));
-    let html = `<time>${time(ev.timestamp)}</time><span class="icon" style="color:${H.platformColor(ev.platform)}">${H.platformIcon(ev.platform)}</span><span>`;
+    let html = `<time>${time(ev.timestamp)}</time><span class="icon" style="color:${H.platformColor(ev.platform)}">${H.platformIcon(ev.platform)}</span><span class="body">`;
     if (isAlert) {
       const a = H.formatAlert(ev);
       html += `<b>${H.escapeHtml(a.title)}</b> · ${H.escapeHtml(a.text)}${a.message ? ` <i>${H.escapeHtml(a.message)}</i>` : ""}`;
@@ -110,6 +215,15 @@
       html += `${badges}<span class="name" style="color:${H.escapeHtml(color)}">${H.escapeHtml(u.display_name || u.name)}</span>${H.renderMessage(ev)}`;
     }
     el.innerHTML = html + "</span>";
+    if (!isAlert && canModerate(ev)) {
+      const btn = document.createElement("button");
+      btn.className = "mod-btn";
+      btn.type = "button";
+      btn.title = H.platformName(ev.platform) + "-Moderation";
+      btn.textContent = "⋯";
+      btn.onclick = (e) => { e.stopPropagation(); openMenu(btn, ev); };
+      el.appendChild(btn);
+    }
     if (!visible(el)) el.style.display = "none";
     list.appendChild(el);
     while (list.children.length > MAX) list.firstElementChild.remove();
@@ -122,12 +236,18 @@
   ss.on("disconnected", () => state.classList.remove("ok"));
   ss.on("history", (h) => {
     state.classList.add("ok");
+    live.length = 0;
+    loadCaps();
+    if (lsGet("ss-dock-info") === "1" && !infoEl.classList.contains("open")) setInfoOpen(true);
+    else if (infoEl.classList.contains("open")) loadStatus();
     list.innerHTML = "";
     [...h.chat.filter((e) => e.type === "chat"), ...h.alerts].sort((a, b) => a.timestamp - b.timestamp).forEach(add);
     scrollDown(true);
   });
-  ss.on("chat", (ev) => { if (ev.type === "chat") add(ev); });
-  ss.on("alert", add);
+  const live = []; // Events seit dem Verlauf (für den Neuaufbau bei geänderten Moderationsrechten)
+  const keep = (ev) => { live.push(ev); if (live.length > MAX) live.shift(); };
+  ss.on("chat", (ev) => { if (ev.type === "chat") { keep(ev); add(ev); } });
+  ss.on("alert", (ev) => { keep(ev); add(ev); });
   ss.on("delete", (ev) => {
     const el = list.querySelector(`[data-id="${CSS.escape(ev.data.message_id || "")}"]`);
     if (el) el.classList.add("deleted");
@@ -137,10 +257,225 @@
       const v = st && st.platforms && st.platforms[p] && st.platforms[p].viewers;
       document.getElementById("v-" + p).textContent = v == null ? "–" : v.toLocaleString("de-DE");
     }
+    renderInfo();
   });
 
+  // ---------- Stream-Info ----------
+  const PLATFORMS = ["twitch", "youtube", "tiktok"];
+  const infoEl = document.getElementById("info");
+  const infoToggle = document.getElementById("info-toggle");
+  let statuses = {}, streamInfo = null, infoLoading = false, titleDirty = false;
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  function setInfoOpen(open) {
+    infoEl.classList.toggle("open", open);
+    infoToggle.classList.toggle("on", open);
+    lsSet("ss-dock-info", open ? "1" : "0");
+    if (open) { loadStatus(); loadStreamInfo(); }
+  }
+  infoToggle.onclick = () => setInfoOpen(!infoEl.classList.contains("open"));
+  document.getElementById("info-refresh").onclick = () => loadStreamInfo();
+
+  async function loadStatus() {
+    try {
+      const list = await (await fetch("/api/status")).json();
+      statuses = Object.fromEntries(list.map((s) => [s.platform, s]));
+      renderInfo();
+    } catch (e) {}
+  }
+  async function loadStreamInfo() {
+    if (infoLoading) return;
+    infoLoading = true;
+    renderInfo();
+    try { streamInfo = await (await fetch("/api/stream-info")).json(); } catch (e) { showError("Stream-Info konnte nicht geladen werden"); }
+    infoLoading = false;
+    if (!titleDirty) document.getElementById("title-input").value = currentTitle();
+    renderInfo();
+  }
+  function currentTitle() {
+    if (!streamInfo) return "";
+    for (const p of ["twitch", "youtube"]) { const i = streamInfo[p]; if (i && i.info && i.info.title) return i.info.title; }
+    return "";
+  }
+
+  const STATE_LABEL = { connected: "Verbunden", connecting: "Verbinde …", error: "Fehler", disconnected: "Getrennt", unconfigured: "Nicht eingerichtet" };
+  function statusPill(st) {
+    if (!st) return `<span class="pill">–</span>`;
+    if (st.live) return `<span class="pill live">LIVE</span>`;
+    const cls = st.state === "connected" ? "ok" : st.state === "connecting" ? "connecting" : st.state === "error" ? "error" : "";
+    return `<span class="pill ${cls}">${STATE_LABEL[st.state] || H.escapeHtml(st.state)}</span>`;
+  }
+  function titleOf(p) {
+    if (!streamInfo || !streamInfo[p]) return infoLoading ? "Lade …" : "";
+    const i = streamInfo[p];
+    if (!i.connected) return "";
+    if (i.error) return "⚠ " + i.error;
+    const d = i.info;
+    if (!d) return p === "youtube" ? "Kein aktiver oder geplanter Livestream" : "";
+    if (p === "tiktok" && !d.live) return "Nicht live";
+    let t = d.title || "–";
+    if (p === "twitch" && d.category_name) t += " · " + d.category_name;
+    if (p === "youtube" && d.status) t += d.status === "active" ? " · läuft" : " · geplant";
+    if (p === "tiktok" && d.topic) t += " · " + d.topic;
+    return t;
+  }
+
+  function renderInfo() {
+    if (!infoEl.classList.contains("open")) return;
+    const stats = ss.stats || {};
+    document.getElementById("info-viewers").textContent = (stats.viewers || 0).toLocaleString("de-DE");
+    document.getElementById("info-rows").innerHTML = PLATFORMS.map((p) => {
+      const st = statuses[p];
+      const pv = stats.platforms && stats.platforms[p];
+      const v = pv && pv.viewers;
+      const likes = pv && pv.total_likes;
+      const title = titleOf(p);
+      return `<div class="prow">
+        <span class="ic" style="color:${H.platformColor(p)}">${H.platformIcon(p)}</span>
+        <span class="pname">${H.platformName(p)} ${statusPill(st)}</span>
+        <span class="viewers">${v == null ? "–" : v.toLocaleString("de-DE")} <small>Zuschauer</small></span>
+        ${st && st.message ? `<span class="detail">${st.account ? H.escapeHtml(st.account) + " · " : ""}${H.escapeHtml(st.message)}${likes ? ` · ${likes.toLocaleString("de-DE")} Likes` : ""}</span>` : ""}
+        ${title ? `<span class="ptitle">${H.escapeHtml(title)}</span>` : ""}
+      </div>`;
+    }).join("");
+    // Titel nur auf Plattformen mit Anmeldung änderbar
+    document.querySelectorAll("#title-form label[data-p]").forEach((l) => {
+      const i = streamInfo && streamInfo[l.dataset.p];
+      const ok = !!(i && i.connected && !(l.dataset.p === "youtube" && !i.info && !i.error));
+      l.classList.toggle("off", !ok);
+      const cb = l.querySelector("input");
+      cb.disabled = !ok;
+      if (!ok) cb.checked = false;
+    });
+  }
+
+  document.getElementById("title-input").addEventListener("input", () => (titleDirty = true));
+  document.getElementById("title-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const title = document.getElementById("title-input").value.trim();
+    const platforms = [...document.querySelectorAll("#title-form input[type=checkbox]:checked")].map((c) => c.value);
+    if (!title) return showError("Bitte einen Titel eingeben");
+    if (!platforms.length) return showError("Keine Plattform ausgewählt");
+    const btn = document.getElementById("title-save");
+    btn.disabled = true;
+    try {
+      const res = await (await fetch("/api/stream-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platforms, title }),
+      })).json();
+      const errors = Object.entries(res).filter(([, r]) => !r.ok).map(([p, r]) => `${H.platformName(p)}: ${r.error}`);
+      if (errors.length) showError(errors.join("\n"));
+      else showToast("Titel gespeichert", true);
+      titleDirty = false;
+      loadStreamInfo();
+    } catch (err) { showError("Titel konnte nicht gespeichert werden"); }
+    btn.disabled = false;
+  };
+
   const toast = document.getElementById("toast");
-  function showError(msg) { toast.textContent = msg; toast.style.display = "block"; setTimeout(() => (toast.style.display = "none"), 4000); }
+  let toastTimer;
+  function showToast(msg, ok) {
+    toast.textContent = msg; toast.classList.toggle("ok", !!ok); toast.style.display = "block";
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast.style.display = "none"), 4000);
+  }
+  function showError(msg) { showToast(msg, false); }
+
+  // ---------- Moderation ----------
+  let caps = { twitch: false, youtube: false, tiktok: false };
+  function canModerate(ev) {
+    const u = ev.user;
+    return caps[ev.platform] && !ev.test && u && u.id && !u.is_owner;
+  }
+  async function loadCaps() {
+    try {
+      const next = await (await fetch("/api/moderation")).json();
+      const changed = JSON.stringify(next) !== JSON.stringify(caps);
+      caps = next;
+      if (changed && ss.history) { // Buttons neu aufbauen
+        list.innerHTML = "";
+        [...ss.history.chat.filter((e) => e.type === "chat"), ...ss.history.alerts].sort((a, b) => a.timestamp - b.timestamp).forEach(add);
+        live.forEach(add);
+        scrollDown(true);
+      }
+    } catch (e) {}
+  }
+  setInterval(() => { loadCaps(); if (infoEl.classList.contains("open")) loadStatus(); }, 10000);
+
+  const TIMEOUTS = {
+    twitch: [["1 Minute", 60], ["10 Minuten", 600], ["1 Stunde", 3600], ["1 Tag", 86400], ["1 Woche", 604800]],
+    youtube: [["10 Sekunden", 10], ["1 Minute", 60], ["5 Minuten", 300], ["30 Minuten", 1800], ["1 Tag", 86400]],
+    tiktok: [["5 Sekunden", 5], ["30 Sekunden", 30], ["1 Minute", 60], ["5 Minuten", 300], ["Ganzer LIVE", 0]],
+  };
+  const menu = document.getElementById("menu");
+  let menuBtn = null;
+  function closeMenu() { menu.style.display = "none"; if (menuBtn) menuBtn.classList.remove("open"); menuBtn = null; }
+  document.addEventListener("click", (e) => { if (!menu.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+  list.addEventListener("scroll", closeMenu);
+
+  async function moderate(ev, action, success, duration) {
+    closeMenu();
+    const pname = H.platformName(ev.platform);
+    try {
+      const res = await fetch("/api/moderate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: ev.platform, action, user_id: ev.user.id, message_id: (ev.data && ev.data.message_id) || null, duration }),
+      });
+      const r = await res.json();
+      if (r.ok) showToast(success, true); else showError(`${pname}: ${r.error}`);
+    } catch (e) { showError(`${pname}: Moderation fehlgeschlagen`); }
+  }
+
+  function openMenu(btn, ev) {
+    if (menuBtn === btn) return closeMenu();
+    closeMenu();
+    const p = ev.platform, u = ev.user, name = u.display_name || u.name, tt = p === "tiktok";
+    const items = [];
+    const item = (label, fn, cls) => items.push({ label, fn, cls });
+    const sep = () => items.push(null);
+    if (!tt && ev.data && ev.data.message_id) item("Nachricht löschen", () => moderate(ev, "delete", "Nachricht gelöscht"));
+    items.push({ label: tt ? "Stummschalten:" : "Timeout:", header: true });
+    for (const [l, s] of TIMEOUTS[p]) item(l, () => moderate(ev, "timeout", `${name}: ${tt ? "stummgeschaltet" : "Timeout"} (${l})`, s), "sub");
+    if (tt) item("Stummschaltung aufheben", () => moderate(ev, "untimeout", `Stummschaltung für ${name} aufgehoben`));
+    sep();
+    item(tt ? "Aus dem LIVE entfernen" : "Bannen", () => moderate(ev, "ban", tt ? `${name} aus dem LIVE entfernt` : `${name} gebannt`), "danger");
+    item(tt ? "Wieder zulassen" : "Entbannen", () => moderate(ev, "unban", tt ? `${name} wieder zugelassen` : `${name} entbannt`));
+    sep();
+    if (u.is_mod) item("Moderator entfernen", () => moderate(ev, "unmod", `${name} ist kein Moderator mehr`));
+    else item("Zum Moderator machen", () => moderate(ev, "mod", `${name} ist jetzt Moderator`));
+    if (p === "twitch") {
+      if ((u.badges || []).includes("vip")) item("VIP entfernen", () => moderate(ev, "unvip", `${name} ist kein VIP mehr`));
+      else item("Zum VIP machen", () => moderate(ev, "vip", `${name} ist jetzt VIP`));
+    }
+    menu.innerHTML = "";
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = `${H.platformName(p)} · ${p === "youtube" || !u.name ? name : "@" + u.name}`;
+    menu.appendChild(label);
+    for (const it of items) {
+      let el;
+      if (!it) { el = document.createElement("div"); el.className = "sep"; }
+      else if (it.header) { el = document.createElement("div"); el.className = "label"; el.textContent = it.label; }
+      else {
+        el = document.createElement("button");
+        el.type = "button";
+        el.className = "item" + (it.cls ? " " + it.cls : "");
+        el.textContent = it.label;
+        el.onclick = (e) => { e.stopPropagation(); it.fn(); };
+      }
+      menu.appendChild(el);
+    }
+    menuBtn = btn;
+    btn.classList.add("open");
+    menu.style.display = "block";
+    const r = btn.getBoundingClientRect(), m = menu.getBoundingClientRect();
+    menu.style.left = Math.max(4, Math.min(r.right - m.width, innerWidth - m.width - 4)) + "px";
+    menu.style.top = (r.bottom + m.height + 4 > innerHeight ? Math.max(4, r.top - m.height - 2) : r.bottom + 2) + "px";
+  }
 
   document.getElementById("form").onsubmit = async (e) => {
     e.preventDefault();

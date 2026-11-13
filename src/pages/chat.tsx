@@ -5,19 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertLine, ChatLine, EmptyState, PageHeader, PlatformIcon } from "@/components/common";
-import { TiktokModMenu } from "@/components/tiktok-mod-menu";
+import { ChatModMenu } from "@/components/chat-mod-menu";
 import { cn } from "@/lib/utils";
-import { api, errorText, PLATFORM_META, PLATFORMS, type Platform, type SSEvent } from "@/lib/api";
+import { api, errorText, PLATFORM_META, PLATFORMS, type ModCaps, type Platform, type SSEvent } from "@/lib/api";
 import { useAppData } from "@/lib/store";
 
 export function ChatPage() {
-  const { chat, alerts, deleted, stats, settings, statuses, clearHistory } = useAppData();
-  // Moderation nur im eigenen, laufenden LIVE mit Anmeldung
-  const canModerateTiktok = !!settings?.tiktok.authorized && !!statuses.tiktok?.live;
+  const { chat, alerts, deleted, stats, statuses, clearHistory } = useAppData();
+  // Wo moderiert werden kann (angemeldet + Chat aktiv) – bei jeder Statusänderung neu abfragen
+  const [caps, setCaps] = useState<ModCaps>({ twitch: false, youtube: false, tiktok: false });
+  useEffect(() => {
+    api.moderationCaps().then(setCaps, () => {});
+  }, [statuses]);
   const modActions = (ev: SSEvent) =>
-    canModerateTiktok && ev.platform === "tiktok" && !ev.test && ev.user && !ev.user.is_owner && /^\d+$/.test(ev.user.id) ? (
-      <TiktokModMenu user={ev.user} />
-    ) : undefined;
+    ev.platform !== "system" && caps[ev.platform] && !ev.test && ev.user?.id && !ev.user.is_owner ? <ChatModMenu ev={ev} /> : undefined;
   const [filter, setFilter] = useState<Record<Platform, boolean>>({ twitch: true, youtube: true, tiktok: true });
   const [showAlerts, setShowAlerts] = useState(true);
   const [target, setTarget] = useState("all");

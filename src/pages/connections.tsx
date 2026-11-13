@@ -45,7 +45,7 @@ function PlatformCard({
   loggedIn: boolean;
   children?: ReactNode;
 }) {
-  const { statuses } = useAppData();
+  const { statuses, refreshSettings } = useAppData();
   const st = statuses[platform];
   const active = st && ["connected", "connecting", "error"].includes(st.state);
   return (
@@ -79,7 +79,16 @@ function PlatformCard({
               <PlugZapIcon /> Verbinden
             </Button>
           )}
-          <Button variant="ghost" onClick={() => run(() => api.logout(platform))}>
+          <Button variant="ghost" onClick={() =>
+              run(async () => {
+                try {
+                  await api.logout(platform);
+                } finally {
+                  // Einstellungen neu laden, sonst gilt man in der Oberfläche weiter als angemeldet
+                  await refreshSettings();
+                }
+              })
+            }>
             <LogOutIcon /> Abmelden
           </Button>
         </CardFooter>

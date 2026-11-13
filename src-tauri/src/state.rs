@@ -40,6 +40,8 @@ pub struct AppState {
     pub tiktok_room: Mutex<Option<crate::tiktok::TiktokRoom>>,
     /// Zwischengespeicherte `sec_uid` des eigenen Kontos (für Wortfilter).
     pub tiktok_sec_uid: Mutex<Option<String>>,
+    /// Von StreamSuite gesetzte YouTube-Banns (Kanal-ID -> Bann-ID), nötig zum Aufheben.
+    pub youtube_bans: Mutex<HashMap<String, String>>,
 }
 
 pub type Shared = Arc<AppState>;

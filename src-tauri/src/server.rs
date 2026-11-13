@@ -10,6 +10,9 @@
 //!   /ws                   WebSocket mit allen Events
 //!   /api/history|stats|status|custom   JSON
 //!   POST /api/chat        Chatnachricht senden (nur vom Dock / eigenen Overlays)
+//!   GET|POST /api/stream-info  Titel & Raum-Infos lesen / Titel ändern (POST nur lokal)
+//!   GET  /api/moderation  Wo gerade moderiert werden kann
+//!   POST /api/moderate    Moderationsaktion (nur vom Dock / eigenen Overlays)
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -69,6 +72,9 @@ pub async fn start(st: Shared) {
         .route("/api/status", get(status))
         .route("/api/custom", get(custom_list))
         .route("/api/chat", post(send_chat))
+        .route("/api/stream-info", get(stream_info).post(update_stream_info))
+        .route("/api/moderation", get(moderation_caps))
+        .route("/api/moderate", post(moderate))
         .route("/custom/{name}", get(custom_redirect))
         .route("/custom/{name}/", get(custom_index))
         .route("/custom/{name}/{*path}", get(custom_file))
@@ -177,6 +183,39 @@ async fn send_chat(State(st): State<Shared>, headers: HeaderMap, body: axum::Jso
     }
     let results = crate::send_chat_all(&st, &body.platform, &body.message).await;
     axum::Json(results).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Stream-Infos (Dock)
+// ---------------------------------------------------------------------------
+
+async fn stream_info(State(st): State<Shared>) -> impl IntoResponse {
+    axum::Json(crate::stream_info(&st).await)
+}
+
+async fn update_stream_info(State(st): State<Shared>, headers: HeaderMap, body: axum::Json<crate::StreamInfoUpdate>) -> Response {
+    if !local_origin(&headers) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    axum::Json(crate::apply_stream_info(&st, body.0).await).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Moderation (Dock)
+// ---------------------------------------------------------------------------
+
+async fn moderation_caps(State(st): State<Shared>) -> impl IntoResponse {
+    axum::Json(crate::moderation::capabilities(&st))
+}
+
+async fn moderate(State(st): State<Shared>, headers: HeaderMap, body: axum::Json<crate::moderation::ModRequest>) -> Response {
+    if !local_origin(&headers) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    match crate::moderation::moderate(&st, &body).await {
+        Ok(()) => axum::Json(json!({ "ok": true })).into_response(),
+        Err(e) => axum::Json(json!({ "ok": false, "error": format!("{e:#}") })).into_response(),
+    }
 }
 
 // ---------------------------------------------------------------------------

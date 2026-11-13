@@ -1,6 +1,7 @@
 mod config;
 mod connections;
 mod hub;
+mod moderation;
 mod server;
 mod state;
 mod tiktok;
@@ -184,6 +185,16 @@ async fn tiktok_moderate(st: tauri::State<'_, Shared>, user_id: String, action: 
 }
 
 #[tauri::command]
+async fn moderate(st: tauri::State<'_, Shared>, request: moderation::ModRequest) -> CmdResult<()> {
+    moderation::moderate(st.inner(), &request).await.map_err(err_chain)
+}
+
+#[tauri::command]
+fn moderation_caps(st: tauri::State<'_, Shared>) -> Value {
+    moderation::capabilities(st.inner())
+}
+
+#[tauri::command]
 async fn tiktok_moderators(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
     tiktok_control::moderators(st.inner()).await.map_err(err_chain)
 }
@@ -289,7 +300,12 @@ async fn send_chat(st: tauri::State<'_, Shared>, platform: String, message: Stri
 
 #[tauri::command]
 async fn get_stream_info(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
-    let st = st.inner().clone();
+    Ok(stream_info(st.inner()).await)
+}
+
+/// Titel/Kategorie/Raum-Infos aller angemeldeten Plattformen (App und OBS-Dock).
+pub async fn stream_info(st: &Shared) -> Value {
+    let st = st.clone();
     let cfg = st.store.get();
     let (tw, yt, tt) = tokio::join!(
         async {
@@ -320,11 +336,11 @@ async fn get_stream_info(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
             }
         }
     );
-    Ok(json!({ "twitch": tw, "youtube": yt, "tiktok": tt }))
+    json!({ "twitch": tw, "youtube": yt, "tiktok": tt })
 }
 
 #[derive(Deserialize)]
-struct StreamInfoUpdate {
+pub struct StreamInfoUpdate {
     platforms: Vec<String>,
     title: Option<String>,
     description: Option<String>,
@@ -334,7 +350,12 @@ struct StreamInfoUpdate {
 
 #[tauri::command]
 async fn update_stream_info(st: tauri::State<'_, Shared>, update: StreamInfoUpdate) -> CmdResult<Value> {
-    let st = st.inner().clone();
+    Ok(apply_stream_info(st.inner(), update).await)
+}
+
+/// Titel (und optional Kategorie/Beschreibung) auf den gewählten Plattformen setzen.
+pub async fn apply_stream_info(st: &Shared, update: StreamInfoUpdate) -> Value {
+    let st = st.clone();
     let title = update.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
     let mut out = serde_json::Map::new();
     let has = |p: &str| update.platforms.iter().any(|x| x == p);
@@ -358,7 +379,7 @@ async fn update_stream_info(st: tauri::State<'_, Shared>, update: StreamInfoUpda
     if let Some(r) = yt {
         out.insert("youtube".into(), result_json(r));
     }
-    Ok(Value::Object(out))
+    Value::Object(out)
 }
 
 #[tauri::command]
@@ -544,6 +565,7 @@ pub fn run() {
                 tiktok_page_lock: tokio::sync::Mutex::new(()),
                 tiktok_room: Mutex::new(None),
                 tiktok_sec_uid: Mutex::new(None),
+                youtube_bans: Mutex::new(HashMap::new()),
             });
             app.manage(st.clone());
 
@@ -594,6 +616,8 @@ pub fn run() {
             tiktok_set_room_switch,
             tiktok_moderate,
             tiktok_moderators,
+            moderate,
+            moderation_caps,
             tiktok_set_moderator,
             tiktok_blocked_words,
             tiktok_add_blocked_word,

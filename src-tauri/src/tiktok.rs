@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use piratetok_live_rs::TikTokLive;
 use piratetok_live_rs::errors::TikTokLiveError;
-use piratetok_live_rs::http::api::{FetchParams, fetch_room_id};
+use piratetok_live_rs::http::api::{FetchParams, RoomIdResponse, fetch_room_id};
 use piratetok_live_rs::structs::TikTokLiveEvent;
 use piratetok_live_rs::structs::proto::{EmoteData, Image, UserIdentity, UserIdentityContext, WebcastGiftMessage};
 use serde_json::json;
@@ -62,7 +62,7 @@ pub async fn run(st: Shared) {
                 5
             }
             Err(TikTokLiveError::UserNotFound(_)) => {
-                st.hub.set_status(Platform::Tiktok, "error", false, format!("TikTok-Konto @{user} nicht gefunden"), account);
+                st.hub.set_status(Platform::Tiktok, "error", false, format!("TikTok-Konto @{user} nicht gefunden – ist das Konto privat? Dann bitte bei TikTok anmelden"), account);
                 return;
             }
             Err(e) => {
@@ -92,14 +92,29 @@ enum Ended {
 }
 
 async fn session(st: &Shared, user: &str, account: &Option<String>) -> Result<Ended, TikTokLiveError> {
-    // Raum-ID + Anchor-ID ermitteln (wirft HostNotOnline, wenn nicht live)
-    let room = match fetch_room_id(user, FetchParams::default()).await {
+    // Mit der eingeloggten Sitzung abfragen – anonym liefert TikTok für private Konten `user_not_found`
+    let cookies = st.store.get().tiktok.session_id.map(|sid| format!("sessionid={sid}"));
+    let params = FetchParams {
+        cookies: cookies.as_deref(),
+        ..FetchParams::default()
+    };
+    // Raum-ID + Anchor-ID ermitteln (HostNotOnline, wenn nicht live)
+    let room = match fetch_room_id(user, params).await {
         Ok(r) => r,
         Err(TikTokLiveError::HostNotOnline(_)) => return Ok(Ended::Offline),
+        // Private Konten: `api-live/user/room` kennt sie nicht → Raum-ID über die Profilseite
+        Err(TikTokLiveError::UserNotFound(_)) => match room_from_profile(st, user, cookies.as_deref()).await? {
+            Some(r) => r,
+            None => return Ok(Ended::Offline),
+        },
         Err(e) => return Err(e),
     };
 
-    let mut stream = match TikTokLive::builder(user).max_retries(5).connect().await {
+    let mut builder = TikTokLive::builder(user).max_retries(5);
+    if let Some(c) = &cookies {
+        builder = builder.cookies(c.clone());
+    }
+    let mut stream = match builder.connect_room(room.room_id.clone()).await {
         Ok(s) => s,
         Err(TikTokLiveError::HostNotOnline(_)) => return Ok(Ended::Offline),
         Err(e) => return Err(e),
@@ -155,6 +170,56 @@ async fn session(st: &Shared, user: &str, account: &Option<String>) -> Result<En
         }
     }
 }
+
+/// Ausweichweg für private Konten: Profilseite laden (User-ID + aktuelle Raum-ID) und per
+/// `check_alive` prüfen, ob der Raum wirklich live ist. `Ok(None)` = nicht live.
+async fn room_from_profile(st: &Shared, user: &str, cookies: Option<&str>) -> Result<Option<RoomIdResponse>, TikTokLiveError> {
+    let mut req = st
+        .http
+        .get(format!("https://www.tiktok.com/@{user}"))
+        .header("User-Agent", PROFILE_UA)
+        .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8");
+    if let Some(c) = cookies {
+        req = req.header("Cookie", c);
+    }
+    let html = req.send().await.map_err(net)?.text().await.map_err(net)?;
+    let data = html
+        .split_once(r#"id="__UNIVERSAL_DATA_FOR_REHYDRATION__""#)
+        .and_then(|(_, rest)| rest.split_once('>'))
+        .and_then(|(_, rest)| rest.split_once("</script>"))
+        .map(|(json, _)| json)
+        .ok_or_else(|| TikTokLiveError::TikTokBlocked("Profilseite ohne Daten".into()))?;
+    let v: serde_json::Value = serde_json::from_str(data)?;
+    let u = v.pointer("/__DEFAULT_SCOPE__/webapp.user-detail/userInfo/user");
+    let field = |k: &str| u.and_then(|u| u.get(k)).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+    let (anchor_id, room_id) = (field("id"), field("roomId"));
+    if anchor_id.is_empty() {
+        return Err(TikTokLiveError::UserNotFound(user.to_string()));
+    }
+    if room_id.is_empty() || room_id == "0" {
+        return Ok(None);
+    }
+    let alive: serde_json::Value = st
+        .http
+        .get(format!(
+            "https://webcast.tiktok.com/webcast/room/check_alive/?aid=1988&user_is_login=false&room_ids={room_id}"
+        ))
+        .header("User-Agent", PROFILE_UA)
+        .send()
+        .await
+        .map_err(net)?
+        .json()
+        .await
+        .map_err(net)?;
+    let live = alive.pointer("/data/0/alive").and_then(|a| a.as_bool()).unwrap_or(false);
+    Ok(live.then_some(RoomIdResponse { room_id, anchor_id }))
+}
+
+fn net(e: impl std::fmt::Display) -> TikTokLiveError {
+    TikTokLiveError::TikTokBlocked(format!("Netzwerkfehler: {e}"))
+}
+
+const PROFILE_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
 fn is_live_status(st: &Shared) -> bool {
     st.hub

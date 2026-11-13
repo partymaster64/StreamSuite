@@ -17,7 +17,7 @@ use crate::state::{Shared, b, opt_s, s, u};
 
 const HELIX: &str = "https://api.twitch.tv/helix";
 const EVENTSUB_URL: &str = "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30";
-pub const SCOPES: &str = "user:read:chat user:write:chat moderator:read:followers channel:read:subscriptions bits:read channel:manage:broadcast";
+pub const SCOPES: &str = "user:read:chat user:write:chat moderator:read:followers channel:read:subscriptions bits:read channel:manage:broadcast moderator:manage:banned_users moderator:manage:chat_messages channel:manage:moderators channel:manage:vips";
 
 // ---------------------------------------------------------------------------
 // HTTP / Auth

@@ -130,6 +130,8 @@ export interface TiktokBlockedWord {
 }
 
 export type TiktokModAction = "mute" | "unmute" | "block" | "unblock";
+export type ModAction = "delete" | "timeout" | "untimeout" | "ban" | "unban" | "mod" | "unmod" | "vip" | "unvip";
+export type ModCaps = Record<"twitch" | "youtube" | "tiktok", boolean>;
 
 export interface StreamInfoResponse {
   twitch: {
@@ -175,6 +177,9 @@ export const api = {
     invoke<void>("tiktok_set_room_switch", { setting, enabled }),
   tiktokModerate: (userId: string, action: TiktokModAction, duration?: number) =>
     invoke<void>("tiktok_moderate", { userId, action, duration }),
+  moderate: (request: { platform: Platform; action: ModAction; user_id: string; message_id?: string; duration?: number }) =>
+    invoke<void>("moderate", { request }),
+  moderationCaps: () => invoke<ModCaps>("moderation_caps"),
   tiktokModerators: () => invoke<TiktokModerator[]>("tiktok_moderators"),
   tiktokSetModerator: (userId: string, enabled: boolean) => invoke<void>("tiktok_set_moderator", { userId, enabled }),
   tiktokBlockedWords: () => invoke<TiktokBlockedWord[]>("tiktok_blocked_words"),

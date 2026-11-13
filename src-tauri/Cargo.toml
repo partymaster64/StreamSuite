@@ -52,3 +52,7 @@ strip = true
 [target.'cfg(target_os = "linux")'.dependencies]
 libloading = "0.9.0"
 webkit2gtk = { version = "2.0.2", features = ["v2_38"] }
+
+[patch.crates-io]
+# Lokale Kopie mit `connect_room` (Verbindung über bekannte Raum-ID, nötig für private Konten)
+piratetok-live-rs = { path = "vendor/piratetok-live-rs" }
