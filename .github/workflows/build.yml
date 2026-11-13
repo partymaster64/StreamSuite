@@ -52,7 +52,6 @@ jobs:
           SS_TWITCH_CLIENT_ID: ${{ secrets.SS_TWITCH_CLIENT_ID }}
           SS_GOOGLE_CLIENT_ID: ${{ secrets.SS_GOOGLE_CLIENT_ID }}
           SS_GOOGLE_CLIENT_SECRET: ${{ secrets.SS_GOOGLE_CLIENT_SECRET }}
-          SS_EULERSTREAM_API_KEY: ${{ secrets.SS_EULERSTREAM_API_KEY }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "StreamSuite ${{ github.ref_name }}"

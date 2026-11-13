@@ -83,8 +83,6 @@ impl Default for YoutubeSettings {
 pub struct TiktokSettings {
     pub enabled: bool,
     pub username: String,
-    /// Optionaler eigener EulerStream-Key (sonst der eingebettete).
-    pub api_key: String,
     /// Sitzungs-Cookie nach dem Login im TikTok-Fenster (nur Marker, das Fenster hat eigene Cookies).
     pub session_id: Option<String>,
 }
@@ -117,10 +115,9 @@ impl Settings {
         let tw_auth = s.twitch.access_token.is_some();
         let yt_auth = s.youtube.refresh_token.is_some();
         let tt_auth = s.tiktok.session_id.is_some();
-        let (tw_ready, yt_ready, tt_ready) = (
+        let (tw_ready, yt_ready) = (
             !self.twitch_client_id().is_empty(),
             !self.google_client().0.is_empty() && !self.google_client().1.is_empty(),
-            !self.eulerstream_key().is_empty(),
         );
         s.twitch.access_token = None;
         s.twitch.refresh_token = None;
@@ -134,11 +131,11 @@ impl Settings {
         // Sind App-Zugangsdaten vorhanden (eingebettet oder eigene)?
         v["twitch"]["credentials_ok"] = tw_ready.into();
         v["youtube"]["credentials_ok"] = yt_ready.into();
-        v["tiktok"]["credentials_ok"] = tt_ready.into();
+        // TikTok braucht keine App-Zugangsdaten (direkte Webcast-Verbindung)
+        v["tiktok"]["credentials_ok"] = true.into();
         v["embedded"] = serde_json::json!({
             "twitch": !EMBEDDED_TWITCH_CLIENT_ID.is_empty(),
             "youtube": !EMBEDDED_GOOGLE_CLIENT_ID.is_empty() && !EMBEDDED_GOOGLE_CLIENT_SECRET.is_empty(),
-            "tiktok": !EMBEDDED_EULERSTREAM_API_KEY.is_empty(),
         });
         v
     }
@@ -156,17 +153,12 @@ impl Settings {
             (EMBEDDED_GOOGLE_CLIENT_ID.to_string(), EMBEDDED_GOOGLE_CLIENT_SECRET.to_string())
         }
     }
-
-    pub fn eulerstream_key(&self) -> String {
-        pick(&self.tiktok.api_key, EMBEDDED_EULERSTREAM_API_KEY)
-    }
 }
 
 // Beim Build eingebettete App-Zugangsdaten (siehe build.rs / credentials.json).
 const EMBEDDED_TWITCH_CLIENT_ID: &str = env!("SS_TWITCH_CLIENT_ID");
 const EMBEDDED_GOOGLE_CLIENT_ID: &str = env!("SS_GOOGLE_CLIENT_ID");
 const EMBEDDED_GOOGLE_CLIENT_SECRET: &str = env!("SS_GOOGLE_CLIENT_SECRET");
-const EMBEDDED_EULERSTREAM_API_KEY: &str = env!("SS_EULERSTREAM_API_KEY");
 
 fn pick(own: &str, embedded: &str) -> String {
     let own = own.trim();

@@ -38,6 +38,7 @@ anyhow = "1.0.104"
 parking_lot = "0.13.0"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "form", "http2", "query"] }
 tauri-plugin-single-instance = "2.5.5"
+piratetok-live-rs = "0.5"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

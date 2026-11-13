@@ -4,6 +4,7 @@ mod hub;
 mod server;
 mod state;
 mod tiktok;
+mod tiktok_control;
 mod tiktok_web;
 mod tray;
 mod twitch;
@@ -157,6 +158,56 @@ fn tiktok_set_username(st: tauri::State<Shared>, username: String) -> CmdResult<
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// TikTok-LIVE-Steuerung (eigener Kanal)
+// ---------------------------------------------------------------------------
+
+fn err_chain(e: anyhow::Error) -> String {
+    format!("{e:#}")
+}
+
+#[tauri::command]
+async fn tiktok_room_info(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
+    tiktok_control::room_info(st.inner()).await.map_err(err_chain)
+}
+
+/// `setting`: "comments" | "comment_filter"
+#[tauri::command]
+async fn tiktok_set_room_switch(st: tauri::State<'_, Shared>, setting: String, enabled: bool) -> CmdResult<()> {
+    tiktok_control::set_room_switch(st.inner(), &setting, enabled).await.map_err(err_chain)
+}
+
+/// `action`: "mute" | "unmute" | "block" | "unblock"; `duration` in Sekunden (nur mute, 0 = ganzer LIVE)
+#[tauri::command]
+async fn tiktok_moderate(st: tauri::State<'_, Shared>, user_id: String, action: String, duration: Option<u64>) -> CmdResult<()> {
+    tiktok_control::moderate(st.inner(), &user_id, &action, duration).await.map_err(err_chain)
+}
+
+#[tauri::command]
+async fn tiktok_moderators(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
+    tiktok_control::moderators(st.inner()).await.map_err(err_chain)
+}
+
+#[tauri::command]
+async fn tiktok_set_moderator(st: tauri::State<'_, Shared>, user_id: String, enabled: bool) -> CmdResult<()> {
+    tiktok_control::set_moderator(st.inner(), &user_id, enabled).await.map_err(err_chain)
+}
+
+#[tauri::command]
+async fn tiktok_blocked_words(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
+    tiktok_control::blocked_words(st.inner()).await.map_err(err_chain)
+}
+
+#[tauri::command]
+async fn tiktok_add_blocked_word(st: tauri::State<'_, Shared>, word: String) -> CmdResult<Value> {
+    tiktok_control::add_blocked_word(st.inner(), &word).await.map_err(err_chain)
+}
+
+#[tauri::command]
+async fn tiktok_delete_blocked_word(st: tauri::State<'_, Shared>, word_id: String) -> CmdResult<()> {
+    tiktok_control::delete_blocked_word(st.inner(), &word_id).await.map_err(err_chain)
+}
+
 #[tauri::command]
 async fn twitch_device_auth(st: tauri::State<'_, Shared>) -> CmdResult<twitch::DeviceAuth> {
     let st = st.inner().clone();
@@ -189,7 +240,7 @@ fn clear_history(st: tauri::State<Shared>) {
     st.hub.clear_history();
 }
 
-/// Sendet eine Chatnachricht an eine oder alle Plattformen. TikTok unterstützt kein Senden.
+/// Sendet eine Chatnachricht an eine oder alle Plattformen (TikTok über das eingeloggte LIVE-Fenster).
 pub async fn send_chat_all(st: &Shared, target: &str, message: &str) -> Value {
     let message = message.trim();
     let mut out = serde_json::Map::new();
@@ -240,7 +291,7 @@ async fn send_chat(st: tauri::State<'_, Shared>, platform: String, message: Stri
 async fn get_stream_info(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
     let st = st.inner().clone();
     let cfg = st.store.get();
-    let (tw, yt) = tokio::join!(
+    let (tw, yt, tt) = tokio::join!(
         async {
             if cfg.twitch.access_token.is_none() {
                 return json!({ "connected": false });
@@ -258,9 +309,18 @@ async fn get_stream_info(st: tauri::State<'_, Shared>) -> CmdResult<Value> {
                 Ok(v) => json!({ "connected": true, "info": v }),
                 Err(e) => json!({ "connected": true, "error": e.to_string() }),
             }
+        },
+        async {
+            if cfg.tiktok.username.trim().is_empty() {
+                return json!({ "connected": false });
+            }
+            match tiktok_control::room_info(&st).await {
+                Ok(v) => json!({ "connected": true, "info": v }),
+                Err(e) => json!({ "connected": true, "error": format!("{e:#}") }),
+            }
         }
     );
-    Ok(json!({ "twitch": tw, "youtube": yt }))
+    Ok(json!({ "twitch": tw, "youtube": yt, "tiktok": tt }))
 }
 
 #[derive(Deserialize)]
@@ -480,6 +540,10 @@ pub fn run() {
                 server_port: Mutex::new(None),
                 tiktok_pending: Mutex::new(HashMap::new()),
                 tiktok_detected_user: Mutex::new(None),
+                tiktok_api_pending: Mutex::new(HashMap::new()),
+                tiktok_page_lock: tokio::sync::Mutex::new(()),
+                tiktok_room: Mutex::new(None),
+                tiktok_sec_uid: Mutex::new(None),
             });
             app.manage(st.clone());
 
@@ -526,6 +590,14 @@ pub fn run() {
             tiktok_show_window,
             tiktok_set_username,
             tiktok_import_session,
+            tiktok_room_info,
+            tiktok_set_room_switch,
+            tiktok_moderate,
+            tiktok_moderators,
+            tiktok_set_moderator,
+            tiktok_blocked_words,
+            tiktok_add_blocked_word,
+            tiktok_delete_blocked_word,
         ])
         .build(tauri::generate_context!())
         .expect("Fehler beim Starten von StreamSuite")

@@ -4,8 +4,11 @@
 //! - Chat senden: Ein verstecktes Fenster lädt die eigene LIVE-Seite und schreibt Nachrichten
 //!   direkt in das Chatfeld – kostenlos und komplett lokal mit dem eigenen Konto.
 //!
+//! - Steuerung (`tiktok_control.rs`): Webcast-API-Aufrufe laufen im Kontext dieser Seite. Die TikTok-Seite
+//!   signiert ihre eigenen Anfragen selbst – lokal, ohne externen Signier-Dienst.
+//!
 //! Sicherheit: tiktok.com erhält KEINEN Zugriff auf die Tauri-IPC. Die App steuert die Seite nur
-//! per `eval`, Rückmeldungen kommen über den Dokumenttitel (`SSUSER:` / `SSCHAT:`).
+//! per `eval`, Rückmeldungen kommen über den Dokumenttitel (`SSUSER:` / `SSCHAT:` / `SSAPI:`).
 
 use std::time::Duration;
 
@@ -65,6 +68,68 @@ const PAGE_SCRIPT: &str = r#"
   }
   function readText(el) { return ((el.tagName === "TEXTAREA" ? el.value : el.textContent) || "").trim(); }
 
+  // Webcast-API im Seitenkontext: gleiche Cookies und dieselbe Anfrage-Signierung wie die TikTok-Seite selbst.
+  function apiReport(id, status, text) {
+    var t = String(text || "");
+    if (t.length > 200000) t = t.slice(0, 200000);
+    var b64 = "";
+    try { b64 = btoa(unescape(encodeURIComponent(t))); } catch (e) {}
+    document.title = "SSAPI:" + id + ":" + status + ":" + b64;
+  }
+  function commonParams() {
+    var lang = navigator.language || "de-DE";
+    var tz = "UTC";
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) {}
+    return {
+      aid: "1988", app_name: "tiktok_web", device_platform: "web_pc", channel: "tiktok_web",
+      app_language: lang.split("-")[0], webcast_language: lang.split("-")[0], browser_language: lang,
+      browser_name: navigator.appCodeName || "Mozilla", browser_online: String(navigator.onLine),
+      browser_platform: navigator.platform || "", browser_version: String(navigator.userAgent || "").replace(/^Mozilla\//, ""),
+      cookie_enabled: String(navigator.cookieEnabled), screen_width: String(screen.width), screen_height: String(screen.height),
+      tz_name: tz, focus_state: "true", is_page_visible: "true", is_fullscreen: "false"
+    };
+  }
+  // Regionalen Webcast-Host verwenden, den die Seite selbst nutzt (z. B. webcast.us.tiktok.com).
+  // Nur dieser ist sicher in der (regionalen) Content-Security-Policy der Seite freigegeben.
+  function webcastHost() {
+    try {
+      var list = performance.getEntriesByType("resource");
+      for (var i = list.length - 1; i >= 0; i--) {
+        var h = new URL(list[i].name).host;
+        if (/^webcast[a-z0-9-]*(\.[a-z0-9-]+)*\.tiktokv?\.com$/.test(h) && h.indexOf("-ws") < 0) return h;
+      }
+    } catch (e) {}
+    return null;
+  }
+  window.__ssApi = function (id, method, path, query, body, type) {
+    var tries = 0;
+    (function waitForHost() {
+      var host = webcastHost();
+      // Direkt nach dem Laden hat die Seite evtl. noch keinen Webcast-Aufruf gemacht – kurz warten.
+      // Fallback: ein von der CSP blockierter Aufruf wird gar nicht erst gesendet (Status 0).
+      if (!host && tries++ < 30) return setTimeout(waitForHost, 500);
+      apiSend(id, host || "webcast.tiktok.com", method, path, query, body, type);
+    })();
+  };
+  function apiSend(id, host, method, path, query, body, type) {
+    try {
+      var params = commonParams();
+      for (var k in (query || {})) params[k] = String(query[k]);
+      var qs = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
+      var xhr = new XMLHttpRequest();
+      xhr.open(method, "https://" + host + "/webcast/" + path + "?" + qs, true);
+      xhr.withCredentials = true;
+      xhr.timeout = 20000;
+      if (body != null) {
+        xhr.setRequestHeader("Content-Type", type === "json" ? "application/json" : "application/x-www-form-urlencoded; charset=UTF-8");
+      }
+      xhr.onload = function () { apiReport(id, xhr.status, xhr.responseText); };
+      xhr.onerror = function () { apiReport(id, 0, ""); };
+      xhr.ontimeout = function () { apiReport(id, -2, ""); };
+      xhr.send(body == null ? null : body);
+    } catch (e) { apiReport(id, -1, String(e)); }
+  }
+
   window.__ssSend = async function (id, text) {
     try {
       var el = null;
@@ -109,6 +174,18 @@ fn on_title(st: &Shared, title: &str) {
             st.store.update(|s| s.tiktok.username = user);
         }
         *st.tiktok_detected_user.lock() = Some(title["SSUSER:".len()..].trim().to_string());
+    } else if let Some(rest) = title.strip_prefix("SSAPI:") {
+        let mut parts = rest.splitn(3, ':');
+        let (id, status, b64) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+        use base64::Engine;
+        let body = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .ok()
+            .and_then(|b| String::from_utf8(b).ok())
+            .unwrap_or_default();
+        if let Some(tx) = st.tiktok_api_pending.lock().remove(id) {
+            let _ = tx.send((status.parse().unwrap_or(-1), body));
+        }
     } else if let Some(rest) = title.strip_prefix("SSCHAT:") {
         let mut parts = rest.splitn(3, ':');
         let (id, status, msg) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
@@ -349,6 +426,7 @@ pub fn reload_chat_window(st: &Shared) {
 }
 
 pub async fn send_chat(st: &Shared, text: &str) -> anyhow::Result<()> {
+    let _channel = st.tiktok_page_lock.lock().await;
     let win = ensure_chat_window(st)?;
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -368,8 +446,52 @@ pub async fn send_chat(st: &Shared, text: &str) -> anyhow::Result<()> {
     }
 }
 
+/// Body eines Webcast-Aufrufs im Seitenkontext.
+pub enum PageBody {
+    None,
+    Form(Vec<(String, String)>),
+    Json(Value),
+}
+
+/// Führt eine Webcast-API-Anfrage in der eingeloggten (versteckten) TikTok-LIVE-Seite aus.
+/// Rückgabe: (HTTP-Status, Antworttext). Status 0 = Netzwerk/CORS, negativ = Seite nicht bereit/Timeout.
+pub async fn page_request(st: &Shared, method: &str, path: &str, query: &[(&str, String)], body: PageBody) -> anyhow::Result<(i64, String)> {
+    let _channel = st.tiktok_page_lock.lock().await;
+    let win = ensure_chat_window(st)?;
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    st.tiktok_api_pending.lock().insert(id.clone(), tx);
+    let query: serde_json::Map<String, Value> = query.iter().map(|(k, v)| (k.to_string(), Value::String(v.clone()))).collect();
+    let (body, kind) = match body {
+        PageBody::None => (Value::Null, "none"),
+        PageBody::Form(fields) => {
+            let encoded = url::form_urlencoded::Serializer::new(String::new()).extend_pairs(fields.iter().map(|(k, v)| (k.as_str(), v.as_str()))).finish();
+            (Value::String(encoded), "form")
+        }
+        PageBody::Json(v) => (Value::String(v.to_string()), "json"),
+    };
+    let js = format!(
+        "(function(){{var n=0;function go(){{if(window.__ssApi){{window.__ssApi({id},{method},{path},{query},{body},{kind});}}else if(n++<40){{setTimeout(go,500);}}else{{document.title='SSAPI:'+{id}+':-3:';}}}}go();}})();",
+        id = serde_json::to_string(&id)?,
+        method = serde_json::to_string(method)?,
+        path = serde_json::to_string(path)?,
+        query = Value::Object(query),
+        body = body,
+        kind = serde_json::to_string(kind)?,
+    );
+    win.eval(js)?;
+    // bis zu 20 s auf die Seite + 15 s auf den Webcast-Host + 20 s Anfrage
+    let res = tokio::time::timeout(Duration::from_secs(60), rx).await;
+    st.tiktok_api_pending.lock().remove(&id);
+    match res {
+        Ok(Ok(r)) => Ok(r),
+        _ => bail!("Keine Antwort vom TikTok-Fenster (Zeitüberschreitung)"),
+    }
+}
+
 /// Abmelden: TikTok-Cookies löschen und Fenster schließen.
 pub fn logout(st: &Shared) {
+    *st.tiktok_sec_uid.lock() = None;
     // Ein (unsichtbares) Fenster wird zum Löschen der Cookies gebraucht
     let win = st
         .app
