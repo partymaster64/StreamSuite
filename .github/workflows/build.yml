@@ -43,6 +43,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fehlt ein Secret, liefert GitHub stillschweigend einen leeren String und die App würde
+      # ohne Twitch-/YouTube-Login gebaut. Hier wird nur geprüft, OB ein Wert da ist – der Inhalt
+      # wird nie ausgegeben (GitHub maskiert Secrets in Logs zusätzlich automatisch).
+      - name: App-Zugangsdaten prüfen
+        shell: bash
+        env:
+          SS_TWITCH_CLIENT_ID: ${{ secrets.SS_TWITCH_CLIENT_ID }}
+          SS_GOOGLE_CLIENT_ID: ${{ secrets.SS_GOOGLE_CLIENT_ID }}
+          SS_GOOGLE_CLIENT_SECRET: ${{ secrets.SS_GOOGLE_CLIENT_SECRET }}
+        run: |
+          missing=0
+          for name in SS_TWITCH_CLIENT_ID SS_GOOGLE_CLIENT_ID SS_GOOGLE_CLIENT_SECRET; do
+            if [ -z "$(printf '%s' "${!name}" | tr -d '[:space:]')" ]; then
+              echo "::error::Repository-Secret $name fehlt oder ist leer (Settings → Secrets and variables → Actions → Repository secrets)."
+              missing=1
+            else
+              echo "$name: gesetzt"
+            fi
+          done
+          exit $missing
+
       - name: Linux-Abhängigkeiten
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
